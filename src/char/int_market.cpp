@@ -190,7 +190,10 @@ void mapif_parse_Market_bid(int32 fd) {
 	auto market = util::umap_find(market_db, market_id);
 	if (market == nullptr) return;
 
-	if (bid_amount < market->price + market->bid_step && bid_amount < market->buynow) return;
+	// Basic checks
+	if (market->seller_id == (int32)char_id) return; // Cannot bid on own item
+	if (bid_amount < market->price + market->bid_step && (market->buynow == 0 || bid_amount < market->buynow)) return;
+	if (market->timestamp < time(nullptr)) return; // Expired
 
 	// Transaction for bidding
 	Sql_QueryStr(sql_handle, "START TRANSACTION");

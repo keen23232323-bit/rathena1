@@ -11,93 +11,183 @@ OnTouch:
 	mes "Welcome to the Global Market!";
 	next;
 
-	switch(select("Search Items:Sell Item:My Active Auctions:Cancel")) {
-	case 1:
-		// Search logic (simplified for now to fixed query or last 10)
-		query_sql("SELECT market_id, item_name, price, buynow FROM custom_market ORDER BY market_id DESC LIMIT 10", .@m_id, .@i_name$, .@price, .@buy);
-		.@count = getarraysize(.@m_id);
-		if (!.@count) {
-			mes "The market is currently empty.";
-			close;
-		}
+	.@char_id = strcharinfo(3);
 
-		mes "Latest listings:";
-		for (.@i = 0; .@i < .@count; .@i++) {
-			.@list$ = .@list$ + .@i_name$[.@i] + " (" + .@price[.@i] + " z) : ";
-		}
-		.@s = select(.@list$);
-		.@idx = .@s - 1;
-
-		mes "Item: " + .@i_name$[.@idx];
-		mes "Current Bid: " + .@price[.@idx] + " z";
-		if (.@buy[.@idx] > 0) mes "Buy Now: " + .@buy[.@idx] + " z";
-
+	while(1) {
+		mes "[Market Board]";
+		mes "What would you like to do?";
 		next;
-		switch(select("Place Bid:Buy Now (Instant):Cancel")) {
+		switch(select("Search Items:Sell Item:My Active Auctions:Cancel")) {
 		case 1:
-			mes "Enter your bid (must be > " + .@price[.@idx] + "):";
-			input .@bid;
-			if (.@bid <= .@price[.@idx]) {
-				mes "Your bid is too low.";
-				close;
+			// Search logic - latest 20 items
+			deletearray .@m_id;
+			deletearray .@i_name$;
+			deletearray .@price;
+			deletearray .@buy;
+			deletearray .@s_id;
+
+			query_sql("SELECT market_id, item_name, price, buynow, seller_id FROM custom_market WHERE end_time > UNIX_TIMESTAMP() ORDER BY market_id DESC LIMIT 20", .@m_id, .@i_name$, .@price, .@buy, .@s_id);
+			.@count = getarraysize(.@m_id);
+			if (!.@count) {
+				mes "[Market Board]";
+				mes "The market is currently empty.";
+				next;
+				break;
 			}
-			if (Zeny < .@bid) {
-				mes "You don't have enough Zeny.";
-				close;
+
+			.@list$ = "";
+			for (.@i = 0; .@i < .@count; .@i++) {
+				.@list$ = .@list$ + .@i_name$[.@i] + " [" + .@price[.@i] + " z]" + ":" ;
 			}
-			market_bid(.@m_id[.@idx], .@bid);
-			mes "Bid placed successfully!";
-			close;
+			.@s = select(.@list$);
+			.@idx = .@s - 1;
+
+			mes "[Market Board]";
+			mes "Item: ^0000FF" + .@i_name$[.@idx] + "^000000";
+			mes "Current Bid: ^FF0000" + .@price[.@idx] + " z^000000";
+			if (.@buy[.@idx] > 0) mes "Buy Now: ^00FF00" + .@buy[.@idx] + " z^000000";
+
+			if (.@s_id[.@idx] == .@char_id) {
+				next;
+				mes "[Market Board]";
+				mes "This is your own listing.";
+				next;
+				break;
+			}
+
+			next;
+			switch(select("Place Bid:Buy Now (Instant):Cancel")) {
+			case 1:
+				mes "[Market Board]";
+				mes "Enter your bid (must be > " + .@price[.@idx] + "):";
+				input .@bid;
+				if (.@bid <= .@price[.@idx]) {
+					mes "[Market Board]";
+					mes "Your bid is too low.";
+					next;
+					break;
+				}
+				if (Zeny < .@bid) {
+					mes "[Market Board]";
+					mes "You don't have enough Zeny.";
+					next;
+					break;
+				}
+				// market_bid handles the check if lot still exists and atomic zeny pay
+				if (market_bid(.@m_id[.@idx], .@bid)) {
+					mes "[Market Board]";
+					mes "Bid placed successfully!";
+				} else {
+					mes "[Market Board]";
+					mes "Failed to place bid. The lot might have changed or expired.";
+				}
+				next;
+				break;
+			case 2:
+				if (.@buy[.@idx] <= 0) {
+					mes "[Market Board]";
+					mes "This item doesn't have a Buy Now price.";
+					next;
+					break;
+				}
+				if (Zeny < .@buy[.@idx]) {
+					mes "[Market Board]";
+					mes "You don't have enough Zeny.";
+					next;
+					break;
+				}
+				if (market_bid(.@m_id[.@idx], .@buy[.@idx])) {
+					mes "[Market Board]";
+					mes "Purchase successful! Item sent to RODEX.";
+				} else {
+					mes "[Market Board]";
+					mes "Purchase failed. Item may have been sold or expired.";
+				}
+				next;
+				break;
+			}
+			break;
+
 		case 2:
-			if (.@buy[.@idx] <= 0) {
-				mes "This item doesn't have a Buy Now price.";
-				close;
+			mes "[Market Board]";
+			mes "Select an item from your inventory to sell:";
+			next;
+
+			getinventorylist;
+			.@inv_list$ = "";
+			for (.@i = 0; .@i < @inventorylist_count; .@i++) {
+				.@inv_list$ = .@inv_list$ + getitemname(@inventorylist_id[.@i]) + ":" ;
 			}
-			if (Zeny < .@buy[.@idx]) {
-				mes "You don't have enough Zeny.";
-				close;
+
+			if (@inventorylist_count == 0) {
+				mes "[Market Board]";
+				mes "Your inventory is empty.";
+				next;
+				break;
 			}
-			market_bid(.@m_id[.@idx], .@buy[.@idx]);
-			mes "Purchase successful! Check RODEX.";
+
+			.@inv_s = select(.@inv_list$);
+			.@inv_idx = .@inv_s - 1;
+			.@item_index = .@inv_idx + 2; // Index for market_list_item
+
+			mes "[Market Board]";
+			mes "Selling: " + getitemname(@inventorylist_id[.@inv_idx]);
+			mes "Enter Starting Price:";
+			input .@price;
+			if (.@price <= 0) {
+				mes "Price must be positive.";
+				next;
+				break;
+			}
+
+			mes "Enter Buy Now Price (0 for none):";
+			input .@buynow;
+			if (.@buynow > 0 && .@buynow <= .@price) {
+				mes "Buy Now price must be higher than starting price.";
+				next;
+				break;
+			}
+
+			mes "Auction duration (hours, 1-72):";
+			input .@hours;
+			if (.@hours < 1) .@hours = 1;
+			if (.@hours > 72) .@hours = 72;
+
+			.@bid_step = .@price / 10;
+			if (.@bid_step < 1) .@bid_step = 1;
+
+			// market_list_item(inventory_index, start_price, buynow, bid_step, hours)
+			if (market_list_item(.@item_index, .@price, .@buynow, .@bid_step, .@hours)) {
+				mes "[Market Board]";
+				mes "Item listed successfully! 6% tax applies on sale.";
+			} else {
+				mes "[Market Board]";
+				mes "Failed to list item. Check if it's tradeable.";
+			}
+			next;
+			break;
+
+		case 3:
+			deletearray .@my_name$;
+			deletearray .@my_price;
+			query_sql("SELECT item_name, price FROM custom_market WHERE seller_id = " + .@char_id + " AND end_time > UNIX_TIMESTAMP()", .@my_name$, .@my_price);
+			.@my_count = getarraysize(.@my_name$);
+
+			mes "[Market Board]";
+			if (!.@my_count) {
+				mes "You have no active listings.";
+			} else {
+				mes "Your active auctions:";
+				for (.@i = 0; .@i < .@my_count; .@i++) {
+					mes (.@i+1) + ". " + .@my_name$[.@i] + " (Current Bid: " + .@my_price[.@i] + " z)";
+				}
+			}
+			next;
+			break;
+
+		case 4:
 			close;
 		}
-		break;
-
-	case 2:
-		mes "Select an item from your inventory to sell:";
-		// player selects item using standard menu or simple list
-		// for simplicity in this script, we'll ask for index (normally done via callshop or special UI)
-		mes "Hint: Use @inventory to see indices (not officially in rAthena, but you get the idea).";
-		mes "Enter inventory index (2-101):";
-		input .@idx;
-
-		mes "Enter Starting Price:";
-		input .@price;
-		mes "Enter Buy Now Price (0 for none):";
-		input .@buynow;
-		mes "Auction duration (hours, max 72):";
-		input .@hours;
-
-		if (.@hours > 72) .@hours = 72;
-
-		// 10% bid step is implicit in our logic but we can store it
-		.@bid_step = .@price / 10;
-		if (.@bid_step < 1) .@bid_step = 1;
-
-		market_list_item(.@idx, .@price, .@buynow, .@bid_step, .@hours);
-		mes "Item listed! 6% tax will be applied upon sale.";
-		close;
-
-	case 3:
-		query_sql("SELECT item_name, price FROM custom_market WHERE seller_id = " + strcharinfo(3), .@my_name$, .@my_price);
-		if (!getarraysize(.@my_name$)) {
-			mes "You have no active listings.";
-		} else {
-			for (.@i = 0; .@i < getarraysize(.@my_name$); .@i++) {
-				mes (.@i+1) + ". " + .@my_name$[.@i] + " (" + .@my_price[.@i] + " z)";
-			}
-		}
-		close;
 	}
 }
 

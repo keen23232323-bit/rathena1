@@ -8112,11 +8112,17 @@ BUILDIN_FUNC(market_list_item) {
 	market.type = itemdb_type(market.item.nameid);
 	safestrncpy(market.item_name, itemdb_name(market.item.nameid), ITEM_NAME_LENGTH);
 
+	// Basic tradeability check
+	if (!itemdb_available(market.item.nameid) || !itemdb_cantrade(&market.item, pc_get_group_level(sd), pc_get_group_level(sd))) {
+		return SCRIPT_CMD_FAILURE;
+	}
+
 	// Remove item from player FIRST (Anti-Dupe)
 	pc_delitem(sd, index, 1, 0, 0, LOG_TYPE_AUCTION);
 
 	intif_Market_register(&market);
 
+	script_pushint(st, 1);
 	return SCRIPT_CMD_SUCCESS;
 }
 
@@ -8135,6 +8141,7 @@ BUILDIN_FUNC(market_bid) {
 	pc_payzeny(sd, bid_amount, LOG_TYPE_AUCTION);
 	intif_Market_bid(sd->status.char_id, market_id, bid_amount, sd->status.name);
 
+	script_pushint(st, 1);
 	return SCRIPT_CMD_SUCCESS;
 }
 
@@ -28018,7 +28025,7 @@ struct script_function buildin_func[] = {
 	BUILDIN_DEF(getelementofarray,"ri"),
 	BUILDIN_DEF(inarray,"rv"),
 	BUILDIN_DEF(countinarray,"rr"),
-	BUILDIN_DEF(market_list_item,"iiiiii"),
+	BUILDIN_DEF(market_list_item,"iiiii"),
 	BUILDIN_DEF(market_bid,"ii"),
 	BUILDIN_DEF(getitem,"vi?"),
 	BUILDIN_DEF(rentitem,"vi?"),
