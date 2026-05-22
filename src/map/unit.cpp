@@ -2007,6 +2007,9 @@ int32 unit_set_walkdelay(block_list *bl, t_tick tick, t_tick delay, int32 type, 
 	if (delay <= 0 || !ud)
 		return 0;
 
+	if (status_get_class_(bl) == CLASS_BOSS)
+		return 0;
+
 	if (type) {
 		//Bosses can ignore skill induced walkdelay (but not damage induced)
 		if(bl->type == BL_MOB && status_has_mode(status_get_status_data(*bl),MD_STATUSIMMUNE))

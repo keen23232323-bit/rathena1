@@ -695,6 +695,22 @@ struct auction_data {
 	int32 auction_end_timer;
 };
 
+struct market_data {
+	uint32 market_id;
+	int32 seller_id;
+	char seller_name[NAME_LENGTH];
+	int32 buyer_id;
+	char buyer_name[NAME_LENGTH];
+
+	struct item item;
+	char item_name[ITEM_NAME_LENGTH];
+	int16 type;
+
+	uint32 price, buynow, bid_step;
+	time_t timestamp;
+	int32 market_end_timer;
+};
+
 struct party_member {
 	uint32 account_id;
 	uint32 char_id;

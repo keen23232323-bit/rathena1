@@ -106,6 +106,8 @@ bool intif_mail_checkreceiver(map_session_data* sd, char* name);
 // AUCTION SYSTEM
 int32 intif_Auction_requestlist(uint32 char_id, int16 type, int32 price, const char* searchtext, int16 page);
 int32 intif_Auction_register(struct auction_data *auction);
+int32 intif_Market_register(struct market_data *market);
+int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint32 bid, const char* name);
 int32 intif_Auction_cancel(uint32 char_id, uint32 auction_id);
 int32 intif_Auction_close(uint32 char_id, uint32 auction_id);
 int32 intif_Auction_bid(uint32 char_id, const char* name, uint32 auction_id, int32 bid);

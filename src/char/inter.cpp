@@ -26,6 +26,7 @@
 #include "inter.hpp"
 #include "int_achievement.hpp"
 #include "int_auction.hpp"
+#include "int_market.hpp"
 #include "int_clan.hpp"
 #include "int_elemental.hpp"
 #include "int_guild.hpp"
@@ -990,6 +991,7 @@ int32 inter_init_sql(const char *file)
 	inter_elemental_sql_init();
 	inter_mail_sql_init();
 	inter_auction_sql_init();
+	inter_market_sql_init();
 	inter_clan_init();
 
 	geoip_readdb();
@@ -1010,6 +1012,7 @@ void inter_final(void)
 	inter_elemental_sql_final();
 	inter_mail_sql_final();
 	inter_auction_sql_final();
+	inter_market_sql_final();
 	inter_clan_final();
 
 	if(geoip_cache) aFree(geoip_cache);
@@ -1439,6 +1442,7 @@ int32 inter_parse_frommap(int32 fd)
 		  || inter_elemental_parse_frommap(fd)
 		  || inter_mail_parse_frommap(fd)
 		  || inter_auction_parse_frommap(fd)
+		  || inter_market_parse_frommap(fd)
 		  || inter_quest_parse_frommap(fd)
 		  || inter_clan_parse_frommap(fd)
 		  || inter_achievement_parse_frommap(fd)

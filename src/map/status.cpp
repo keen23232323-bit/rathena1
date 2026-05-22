@@ -2295,7 +2295,10 @@ bool status_check_visibility(const block_list* src, const block_list* target, bo
 	const status_change* tsc = status_get_sc(target);
 	switch (src->type) {
 		case BL_MOB:
-			view_range = static_cast<const mob_data*>(src)->db->range3;
+			if (status_get_class_(src) == CLASS_BOSS)
+				view_range = AREA_SIZE;
+			else
+				view_range = static_cast<const mob_data*>(src)->db->range3;
 			break;
 		case BL_PET:
 			view_range = static_cast<const pet_data*>(src)->db->range2;

@@ -8082,6 +8082,62 @@ BUILDIN_FUNC(rentitem2) {
  * Returned Qty is always 1, only works on equip-able
  * equipment
  *------------------------------------------*/
+BUILDIN_FUNC(market_list_item) {
+	map_session_data* sd = nullptr;
+	int32 index, price, buynow, bid_step, hours;
+	struct market_data market;
+
+	script_rid2sd(sd);
+	if (sd == nullptr) return SCRIPT_CMD_FAILURE;
+
+	index = script_getnum(st, 2) - 2; // index in inventory
+	price = script_getnum(st, 3);
+	buynow = script_getnum(st, 4);
+	bid_step = script_getnum(st, 5);
+	hours = script_getnum(st, 6);
+
+	if (index < 0 || index >= MAX_INVENTORY || sd->inventory.u.items_inventory[index].nameid == 0) return SCRIPT_CMD_FAILURE;
+	if (price <= 0 || hours <= 0) return SCRIPT_CMD_FAILURE;
+
+	memset(&market, 0, sizeof(struct market_data));
+	market.seller_id = sd->status.char_id;
+	safestrncpy(market.seller_name, sd->status.name, NAME_LENGTH);
+	market.price = price;
+	market.buynow = buynow;
+	market.bid_step = bid_step;
+	market.timestamp = time(nullptr) + (hours * 3600);
+
+	memcpy(&market.item, &sd->inventory.u.items_inventory[index], sizeof(struct item));
+	market.item.amount = 1;
+	market.type = itemdb_type(market.item.nameid);
+	safestrncpy(market.item_name, itemdb_name(market.item.nameid), ITEM_NAME_LENGTH);
+
+	// Remove item from player FIRST (Anti-Dupe)
+	pc_delitem(sd, index, 1, 0, 0, LOG_TYPE_AUCTION);
+
+	intif_Market_register(&market);
+
+	return SCRIPT_CMD_SUCCESS;
+}
+
+BUILDIN_FUNC(market_bid) {
+	map_session_data* sd = nullptr;
+	uint32 market_id, bid_amount;
+
+	script_rid2sd(sd);
+	if (sd == nullptr) return SCRIPT_CMD_FAILURE;
+
+	market_id = (uint32)script_getnum(st, 2);
+	bid_amount = (uint32)script_getnum(st, 3);
+
+	if (sd->status.zeny < bid_amount) return SCRIPT_CMD_FAILURE;
+
+	pc_payzeny(sd, bid_amount, LOG_TYPE_AUCTION);
+	intif_Market_bid(sd->status.char_id, market_id, bid_amount, sd->status.name);
+
+	return SCRIPT_CMD_SUCCESS;
+}
+
 BUILDIN_FUNC(getnameditem)
 {
 	t_itemid nameid;
@@ -27962,6 +28018,8 @@ struct script_function buildin_func[] = {
 	BUILDIN_DEF(getelementofarray,"ri"),
 	BUILDIN_DEF(inarray,"rv"),
 	BUILDIN_DEF(countinarray,"rr"),
+	BUILDIN_DEF(market_list_item,"iiiiii"),
+	BUILDIN_DEF(market_bid,"ii"),
 	BUILDIN_DEF(getitem,"vi?"),
 	BUILDIN_DEF(rentitem,"vi?"),
 	BUILDIN_DEF(rentitem2,"viiiiiiii?"),

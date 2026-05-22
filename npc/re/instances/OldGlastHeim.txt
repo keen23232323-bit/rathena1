@@ -22,10 +22,10 @@
 //============================================================
 
 glast_01,204,273,5	script	Hugin	4_M_SAGE_C,{
-	if (BaseLevel < 130) {
+	if (BaseLevel < 90) {
 		mes "[Hugin]";
 		mes "Why don't you come back after becoming stronger?";
-		mes "Maybe, level 130.";
+		mes "Maybe, level 90.";
 		close;
 	}
 	if (isbegin_quest(12316) == 0) {
