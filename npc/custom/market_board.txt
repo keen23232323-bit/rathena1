@@ -6,6 +6,7 @@
 //============================================================
 
 -	script	MarketBoard	858,{
+OnTouch:
 	mes "[Market Board]";
 	mes "Welcome to the Global Market!";
 	next;
