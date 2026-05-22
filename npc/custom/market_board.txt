@@ -1,0 +1,106 @@
+//===== rAthena Script =======================================
+//= Custom Market Board
+//===== Description: =========================================
+//= A Diablo 3-style market and auction system.
+//= Features: RODEX delivery, 6% tax, Anti-Dupe.
+//============================================================
+
+-	script	MarketBoard	858,{
+	mes "[Market Board]";
+	mes "Welcome to the Global Market!";
+	next;
+
+	switch(select("Search Items:Sell Item:My Active Auctions:Cancel")) {
+	case 1:
+		// Search logic (simplified for now to fixed query or last 10)
+		query_sql("SELECT market_id, item_name, price, buynow FROM custom_market ORDER BY market_id DESC LIMIT 10", .@m_id, .@i_name$, .@price, .@buy);
+		.@count = getarraysize(.@m_id);
+		if (!.@count) {
+			mes "The market is currently empty.";
+			close;
+		}
+
+		mes "Latest listings:";
+		for (.@i = 0; .@i < .@count; .@i++) {
+			.@list$ = .@list$ + .@i_name$[.@i] + " (" + .@price[.@i] + " z) : ";
+		}
+		.@s = select(.@list$);
+		.@idx = .@s - 1;
+
+		mes "Item: " + .@i_name$[.@idx];
+		mes "Current Bid: " + .@price[.@idx] + " z";
+		if (.@buy[.@idx] > 0) mes "Buy Now: " + .@buy[.@idx] + " z";
+
+		next;
+		switch(select("Place Bid:Buy Now (Instant):Cancel")) {
+		case 1:
+			mes "Enter your bid (must be > " + .@price[.@idx] + "):";
+			input .@bid;
+			if (.@bid <= .@price[.@idx]) {
+				mes "Your bid is too low.";
+				close;
+			}
+			if (Zeny < .@bid) {
+				mes "You don't have enough Zeny.";
+				close;
+			}
+			market_bid(.@m_id[.@idx], .@bid);
+			mes "Bid placed successfully!";
+			close;
+		case 2:
+			if (.@buy[.@idx] <= 0) {
+				mes "This item doesn't have a Buy Now price.";
+				close;
+			}
+			if (Zeny < .@buy[.@idx]) {
+				mes "You don't have enough Zeny.";
+				close;
+			}
+			market_bid(.@m_id[.@idx], .@buy[.@idx]);
+			mes "Purchase successful! Check RODEX.";
+			close;
+		}
+		break;
+
+	case 2:
+		mes "Select an item from your inventory to sell:";
+		// player selects item using standard menu or simple list
+		// for simplicity in this script, we'll ask for index (normally done via callshop or special UI)
+		mes "Hint: Use @inventory to see indices (not officially in rAthena, but you get the idea).";
+		mes "Enter inventory index (2-101):";
+		input .@idx;
+
+		mes "Enter Starting Price:";
+		input .@price;
+		mes "Enter Buy Now Price (0 for none):";
+		input .@buynow;
+		mes "Auction duration (hours, max 72):";
+		input .@hours;
+
+		if (.@hours > 72) .@hours = 72;
+
+		// 10% bid step is implicit in our logic but we can store it
+		.@bid_step = .@price / 10;
+		if (.@bid_step < 1) .@bid_step = 1;
+
+		market_list_item(.@idx, .@price, .@buynow, .@bid_step, .@hours);
+		mes "Item listed! 6% tax will be applied upon sale.";
+		close;
+
+	case 3:
+		query_sql("SELECT item_name, price FROM custom_market WHERE seller_id = " + strcharinfo(3), .@my_name$, .@my_price);
+		if (!getarraysize(.@my_name$)) {
+			mes "You have no active listings.";
+		} else {
+			for (.@i = 0; .@i < getarraysize(.@my_name$); .@i++) {
+				mes (.@i+1) + ". " + .@my_name$[.@i] + " (" + .@my_price[.@i] + " z)";
+			}
+		}
+		close;
+	}
+}
+
+// Add the NPC to main cities
+prontera,150,150,5	duplicate(MarketBoard)	Market Board	858
+alberta,150,150,5	duplicate(MarketBoard)	Market Board	858
+morocc,150,150,5	duplicate(MarketBoard)	Market Board	858

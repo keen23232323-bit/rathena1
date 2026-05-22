@@ -669,6 +669,12 @@ ACMD_FUNC(where)
 	return 0;
 }
 
+ACMD_FUNC(market) {
+	nullpo_ret(sd);
+	npc_event_do("MarketBoard::OnTouch");
+	return 0;
+}
+
 /*==========================================
  *
  *------------------------------------------*/
@@ -11738,6 +11744,7 @@ void atcommand_basecommands(void) {
 		ACMD_DEF(feelreset),
 		ACMD_DEF(hatereset),
 		ACMD_DEF(auction),
+		ACMD_DEF(market),
 		ACMD_DEF(mail),
 		ACMD_DEF(ksprotection),
 		ACMD_DEF(allowks),

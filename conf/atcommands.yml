@@ -103,6 +103,9 @@ Body:
   - Command: auction
     Help: |
       Opens the auction window.
+  - Command: market
+    Help: |
+      Opens the market window.
   - Command: autoloot
     Help: |
       Params: <on|off|#>
