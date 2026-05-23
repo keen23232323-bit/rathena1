@@ -8090,14 +8090,38 @@ BUILDIN_FUNC(market_list_item) {
 	script_rid2sd(sd);
 	if (sd == nullptr) return SCRIPT_CMD_FAILURE;
 
-	index = script_getnum(st, 2) - 2; // index in inventory
+	index = script_getnum(st, 2); // index in inventory
 	price = script_getnum(st, 3);
 	buynow = script_getnum(st, 4);
 	bid_step = script_getnum(st, 5);
 	hours = script_getnum(st, 6);
 
-	if (index < 0 || index >= MAX_INVENTORY || sd->inventory.u.items_inventory[index].nameid == 0) return SCRIPT_CMD_FAILURE;
-	if (price <= 0 || hours <= 0) return SCRIPT_CMD_FAILURE;
+	if (index < 0 || index >= MAX_INVENTORY || sd->inventory.u.items_inventory[index].nameid == 0) {
+		script_pushint(st, 0);
+		return SCRIPT_CMD_SUCCESS;
+	}
+	if (price <= 0 || hours <= 0) {
+		script_pushint(st, 0);
+		return SCRIPT_CMD_SUCCESS;
+	}
+
+	// Cannot list equipped items
+	if (sd->inventory.u.items_inventory[index].equip != 0) {
+		script_pushint(st, 0);
+		return SCRIPT_CMD_SUCCESS;
+	}
+
+	// Cannot list bound items
+	if (sd->inventory.u.items_inventory[index].bound != BOUND_NONE) {
+		script_pushint(st, 0);
+		return SCRIPT_CMD_SUCCESS;
+	}
+
+	// Cannot list untradeable items
+	if (!itemdb_cantrade(&sd->inventory.u.items_inventory[index], pc_get_group_level(sd), pc_get_group_level(sd))) {
+		script_pushint(st, 0);
+		return SCRIPT_CMD_SUCCESS;
+	}
 
 	memset(&market, 0, sizeof(struct market_data));
 	market.seller_id = sd->status.char_id;
@@ -8117,6 +8141,22 @@ BUILDIN_FUNC(market_list_item) {
 
 	intif_Market_register(&market);
 
+	script_pushint(st, 1);
+	return SCRIPT_CMD_SUCCESS;
+}
+
+BUILDIN_FUNC(market_cancel) {
+	map_session_data* sd = nullptr;
+	uint32 market_id;
+
+	script_rid2sd(sd);
+	if (sd == nullptr) return SCRIPT_CMD_FAILURE;
+
+	market_id = (uint32)script_getnum(st, 2);
+
+	intif_Market_cancel(sd->status.char_id, market_id);
+
+	script_pushint(st, 1);
 	return SCRIPT_CMD_SUCCESS;
 }
 
@@ -8130,11 +8170,15 @@ BUILDIN_FUNC(market_bid) {
 	market_id = (uint32)script_getnum(st, 2);
 	bid_amount = (uint32)script_getnum(st, 3);
 
-	if (sd->status.zeny < bid_amount) return SCRIPT_CMD_FAILURE;
+	if ((uint32)sd->status.zeny < bid_amount) {
+		script_pushint(st, 0);
+		return SCRIPT_CMD_SUCCESS;
+	}
 
-	pc_payzeny(sd, bid_amount, LOG_TYPE_AUCTION);
+	// NO pc_payzeny here - char-server will confirm and notify back to deduct
 	intif_Market_bid(sd->status.char_id, market_id, bid_amount, sd->status.name);
 
+	script_pushint(st, 1);
 	return SCRIPT_CMD_SUCCESS;
 }
 
@@ -28018,8 +28062,9 @@ struct script_function buildin_func[] = {
 	BUILDIN_DEF(getelementofarray,"ri"),
 	BUILDIN_DEF(inarray,"rv"),
 	BUILDIN_DEF(countinarray,"rr"),
-	BUILDIN_DEF(market_list_item,"iiiiii"),
+	BUILDIN_DEF(market_list_item,"iiiii"),
 	BUILDIN_DEF(market_bid,"ii"),
+	BUILDIN_DEF(market_cancel,"i"),
 	BUILDIN_DEF(getitem,"vi?"),
 	BUILDIN_DEF(rentitem,"vi?"),
 	BUILDIN_DEF(rentitem2,"viiiiiiii?"),
