@@ -46,6 +46,7 @@ static const int32 packet_len_table[] = {
 	12,-1, 7, 3,  0, 0, 0, 0,  0, 0,-1, 9, -1, 0,  0, 0, //0x3880  Pet System,  Storages
 	-1,-1, 7, 3,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x3890  Homunculus [albator]
 	-1,-1, 8, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38A0  Clans
+	11,10, 7, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38B0  Custom Market
 };
 
 extern int32 char_fd; // inter server Fd used for char_fd
@@ -140,6 +141,17 @@ int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint32 bid, const char*
 	WFIFOL(inter_fd, 10) = bid;
 	safestrncpy(WFIFOCP(inter_fd, 14), name, NAME_LENGTH);
 	WFIFOSET(inter_fd, 14 + NAME_LENGTH);
+	return 1;
+}
+
+int32 intif_Market_cancel(uint32 char_id, uint32 market_id) {
+	if(CheckForCharServer()) return 0;
+
+	WFIFOHEAD(inter_fd, 10);
+	WFIFOW(inter_fd, 0) = 0x3062;
+	WFIFOL(inter_fd, 2) = char_id;
+	WFIFOL(inter_fd, 6) = market_id;
+	WFIFOSET(inter_fd, 10);
 	return 1;
 }
 
@@ -2970,6 +2982,51 @@ static void intif_parse_Auction_message(int32 fd)
 	clif_Auction_message(sd->fd, result);
 }
 
+void intif_parse_Market_register_result(int32 fd) {
+	uint32 market_id = RFIFOL(fd, 2);
+	uint32 char_id = RFIFOL(fd, 6);
+	uint8 success = RFIFOB(fd, 10);
+
+	if (!success) {
+		ShowWarning("Market: Failed to register item for char_id %u.\n", char_id);
+	}
+}
+
+void intif_parse_Market_bid_result(int32 fd) {
+	uint32 char_id = RFIFOL(fd, 2);
+	uint32 amount = RFIFOL(fd, 6);
+
+	map_session_data* sd = map_charid2sd(char_id);
+	if (sd == nullptr) return;
+
+	if (amount == 0) {
+		clif_displaymessage(sd->fd, "Market: Bid failed. Item may have expired, been sold, or you are the seller.");
+		return;
+	}
+
+	if ((uint32)sd->status.zeny < amount) {
+		ShowError("Market: Player %s (%d) has insufficient zeny (%d < %u) for accepted bid!\n", sd->status.name, char_id, sd->status.zeny, amount);
+		return;
+	}
+
+	pc_payzeny(sd, amount, LOG_TYPE_AUCTION);
+	clif_displaymessage(sd->fd, "Market: Bid placed successfully.");
+}
+
+void intif_parse_Market_cancel_result(int32 fd) {
+	uint32 char_id = RFIFOL(fd, 2);
+	uint8 success = RFIFOB(fd, 6);
+
+	map_session_data* sd = map_charid2sd(char_id);
+	if (sd == nullptr) return;
+
+	if (success) {
+		clif_displaymessage(sd->fd, "Market: Listing cancelled. Item returned via RODEX.");
+	} else {
+		clif_displaymessage(sd->fd, "Market: Failed to cancel listing. It may have bids or already ended.");
+	}
+}
+
 /*==========================================
  * Mercenary's System
  *------------------------------------------*/
@@ -3913,6 +3970,10 @@ int32 intif_parse(int32 fd)
 	case 0x38A0:	intif_parse_clans(fd); break;
 	case 0x38A1:	intif_parse_clan_message(fd); break;
 	case 0x38A2:	intif_parse_clan_onlinecount(fd); break;
+
+	case 0x38B0:	intif_parse_Market_register_result(fd); break;
+	case 0x38B1:	intif_parse_Market_bid_result(fd); break;
+	case 0x38B2:	intif_parse_Market_cancel_result(fd); break;
 
 	default:
 		ShowError("intif_parse : unknown packet %d %x\n",fd,RFIFOW(fd,0));

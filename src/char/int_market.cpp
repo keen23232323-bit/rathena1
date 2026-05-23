@@ -165,7 +165,16 @@ void mapif_Market_register(int32 fd, struct market_data* market) {
 	||  SQL_SUCCESS != stmt.Execute()) {
 		SqlStmt_ShowDebug(stmt);
 		Sql_QueryStr(sql_handle, "ROLLBACK");
-		// Notify failure to map
+
+		// Return item to player via RODEX for safety
+		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Registration Failed", "Failed to list item. It has been returned.", 0, &market->item, 1);
+
+		WFIFOHEAD(fd, 11);
+		WFIFOW(fd, 0) = 0x38B0;
+		WFIFOL(fd, 2) = 0;
+		WFIFOL(fd, 6) = market->seller_id;
+		WFIFOB(fd, 10) = 0; // failure
+		WFIFOSET(fd, 11);
 		return;
 	}
 
@@ -178,6 +187,14 @@ void mapif_Market_register(int32 fd, struct market_data* market) {
 	t_tick duration = (t_tick)(market->timestamp - time(nullptr)) * 1000;
 	market_ptr->market_end_timer = add_timer(gettick() + duration, market_end_timer, market->market_id, 0);
 	market_db[market->market_id] = market_ptr;
+
+	// Notify success
+	WFIFOHEAD(fd, 11);
+	WFIFOW(fd, 0) = 0x38B0;
+	WFIFOL(fd, 2) = market->market_id;
+	WFIFOL(fd, 6) = market->seller_id;
+	WFIFOB(fd, 10) = 1; // success
+	WFIFOSET(fd, 11);
 }
 
 void mapif_parse_Market_bid(int32 fd) {
@@ -188,9 +205,15 @@ void mapif_parse_Market_bid(int32 fd) {
 	safestrncpy(bidder_name, (char*)RFIFOP(fd, 14), NAME_LENGTH);
 
 	auto market = util::umap_find(market_db, market_id);
-	if (market == nullptr) return;
 
-	if (bid_amount < market->price + market->bid_step && bid_amount < market->buynow) return;
+	if (market == nullptr || market->seller_id == (int32)char_id || (bid_amount < market->price + market->bid_step && bid_amount < market->buynow)) {
+		WFIFOHEAD(fd, 10);
+		WFIFOW(fd, 0) = 0x38B1;
+		WFIFOL(fd, 2) = char_id;
+		WFIFOL(fd, 6) = 0; // failure
+		WFIFOSET(fd, 10);
+		return;
+	}
 
 	// Transaction for bidding
 	Sql_QueryStr(sql_handle, "START TRANSACTION");
@@ -217,6 +240,40 @@ void mapif_parse_Market_bid(int32 fd) {
 		market_save(market);
 		Sql_QueryStr(sql_handle, "COMMIT");
 	}
+
+	// Notify success - deduct zeny on map server
+	WFIFOHEAD(fd, 10);
+	WFIFOW(fd, 0) = 0x38B1;
+	WFIFOL(fd, 2) = char_id;
+	WFIFOL(fd, 6) = bid_amount;
+	WFIFOSET(fd, 10);
+}
+
+void mapif_parse_Market_cancel(int32 fd) {
+	uint32 char_id = RFIFOL(fd, 2);
+	uint32 market_id = RFIFOL(fd, 6);
+
+	auto market = util::umap_find(market_db, market_id);
+
+	if (market == nullptr || market->seller_id != (int32)char_id || market->buyer_id > 0) {
+		WFIFOHEAD(fd, 7);
+		WFIFOW(fd, 0) = 0x38B2;
+		WFIFOL(fd, 2) = char_id;
+		WFIFOB(fd, 6) = 0; // failure
+		WFIFOSET(fd, 7);
+		return;
+	}
+
+	// Return item to seller via RODEX
+	mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Listing Cancelled", "Your listing has been cancelled. Item returned.", 0, &market->item, 1);
+
+	market_delete(market);
+
+	WFIFOHEAD(fd, 7);
+	WFIFOW(fd, 0) = 0x38B2;
+	WFIFOL(fd, 2) = char_id;
+	WFIFOB(fd, 6) = 1; // success
+	WFIFOSET(fd, 7);
 }
 
 int32 inter_market_parse_frommap(int32 fd) {
@@ -226,6 +283,9 @@ int32 inter_market_parse_frommap(int32 fd) {
 			break;
 		case 0x3061: // Market Bid
 			mapif_parse_Market_bid(fd);
+			break;
+		case 0x3062: // Market Cancel
+			mapif_parse_Market_cancel(fd);
 			break;
 		default:
 			return 0;
