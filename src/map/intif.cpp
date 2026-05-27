@@ -3000,24 +3000,18 @@ void intif_parse_Market_bid_result(int32 fd) {
 	map_session_data* sd = map_charid2sd(char_id);
 	if (sd == nullptr) return;
 
-	if (!success) {
-		clif_displaymessage(sd->fd, "Market: Bid failed. Item may have expired, been sold, or you are the seller.");
-		return;
+	if (success == 1) {
+		if ((uint64)sd->status.zeny < amount) {
+			ShowError("Market: Player %s (%d) has insufficient zeny for accepted bid at delivery phase!\n", sd->status.name, char_id);
+			clif_displaymessage(sd->fd, "Market: Transaction failed - insufficient funds.");
+			return;
+		}
+		// Deduct money safely here only after Char-server confirmed the item is available
+		pc_payzeny(sd, (int32)amount, LOG_TYPE_AUCTION);
+		clif_displaymessage(sd->fd, "Market: Purchase successful. Item delivered via RODEX.");
+	} else {
+		clif_displaymessage(sd->fd, "Market: Transaction failed. Item might be already sold.");
 	}
-
-	if (amount > MAX_ZENY) {
-		ShowError("Market: Invalid bid amount %" PRIu64 " for player %s (%d)!\n", amount, sd->status.name, char_id);
-		return;
-	}
-
-	if ((uint64)sd->status.zeny < amount) {
-		ShowError("Market: Player %s (%d) has insufficient zeny (%d < %" PRIu64 ") for accepted bid!\n", sd->status.name, char_id, sd->status.zeny, amount);
-		clif_displaymessage(sd->fd, "Market: Transaction failed - insufficient funds.");
-		return;
-	}
-
-	pc_payzeny(sd, (int32)amount, LOG_TYPE_AUCTION);
-	clif_displaymessage(sd->fd, "Market: Bid placed successfully.");
 }
 
 void intif_parse_Market_cancel_result(int32 fd) {
