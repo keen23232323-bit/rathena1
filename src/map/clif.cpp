@@ -19647,15 +19647,7 @@ static void clif_parse_SearchStoreInfoListItemClick( int32 fd, map_session_data*
 			return;
 		}
 
-		if (pc_payzeny(sd, (int32)price, LOG_TYPE_AUCTION)) {
-			clif_displaymessage(fd, "Market: You do not have enough Zeny.");
-			return;
-		}
-
-		if (!intif_Market_bid(sd->status.char_id, market_id, price, sd->status.name)) {
-			pc_getzeny(sd, (int32)price, LOG_TYPE_AUCTION);
-			clif_displaymessage(fd, "Market: Communication error with Char-Server. Zeny refunded.");
-		}
+		intif_Market_bid(sd->status.char_id, market_id, price, sd->status.name);
 		return;
 	}
 

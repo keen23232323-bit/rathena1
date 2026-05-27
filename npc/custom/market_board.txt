@@ -18,9 +18,10 @@
 		mes "[Market Board]";
 		mes "Would you like to list an item for sale?";
 		next;
-		if (select("Sell Item:My Listings:Cancel") == 3) close;
+		.@menu = select("Sell Item:My Listings:Cancel");
+		if (.@menu == 3) close;
 
-		switch(@menu) {
+		switch(.@menu) {
 		// =================== SELL ITEM ===================
 		case 1:
 			getinventorylist;
