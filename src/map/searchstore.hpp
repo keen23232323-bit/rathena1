@@ -14,6 +14,7 @@
 #include "map.hpp"
 
 #define SEARCHSTORE_RESULTS_PER_PAGE 10
+#define CUSTOM_MARKET_STORE_ID_OFFSET 0x80000000
 
 /// Failure constants for clif functions
 enum e_searchstore_failure : uint16

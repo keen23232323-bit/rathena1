@@ -278,13 +278,13 @@ void mapif_parse_Market_cancel(int32 fd) {
 
 int32 inter_market_parse_frommap(int32 fd) {
 	switch (RFIFOW(fd, 0)) {
-		case 0x3060: // Market Register
+		case 0x30B4: // Market Register (was 0x3060)
 			mapif_Market_register(fd, (struct market_data*)RFIFOP(fd, 4));
 			break;
-		case 0x3061: // Market Bid
+		case 0x30B5: // Market Bid (was 0x3061)
 			mapif_parse_Market_bid(fd);
 			break;
-		case 0x3062: // Market Cancel
+		case 0x30B6: // Market Cancel (was 0x3062)
 			mapif_parse_Market_cancel(fd);
 			break;
 		default:

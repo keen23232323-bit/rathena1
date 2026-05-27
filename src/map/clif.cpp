@@ -54,6 +54,7 @@
 #include "quest.hpp"
 #include "script.hpp"
 #include "skill.hpp"
+#include "searchstore.hpp"
 #include "status.hpp"
 #include "storage.hpp"
 #include "unit.hpp"
@@ -19615,6 +19616,40 @@ static void clif_parse_SearchStoreInfoListItemClick( int32 fd, map_session_data*
 		return;
 
 	const PACKET_CZ_SSILIST_ITEM_CLICK* p = reinterpret_cast<PACKET_CZ_SSILIST_ITEM_CLICK*>( RFIFOP( fd, 0 ) );
+
+	if (p->storeId & CUSTOM_MARKET_STORE_ID_OFFSET) {
+		uint32 market_id = p->storeId & ~CUSTOM_MARKET_STORE_ID_OFFSET;
+		uint32 price = 0;
+		uint32 seller_id = 0;
+
+		// Security: Get the price and seller_id to double check
+		if (SQL_ERROR != Sql_Query(mmysql_handle, "SELECT price, seller_id FROM custom_market WHERE market_id = %u", market_id)) {
+			if (SQL_SUCCESS == Sql_NextRow(mmysql_handle)) {
+				char* data;
+				Sql_GetData(mmysql_handle, 0, &data, nullptr); price = (uint32)strtoul(data, nullptr, 10);
+				Sql_GetData(mmysql_handle, 1, &data, nullptr); seller_id = (uint32)atoi(data);
+			}
+			Sql_FreeResult(mmysql_handle);
+		}
+
+		if (price == 0) {
+			clif_displaymessage(fd, "Market: Item no longer available.");
+			return;
+		}
+
+		if (seller_id == sd->status.char_id) {
+			clif_displaymessage(fd, "Market: You cannot buy your own item.");
+			return;
+		}
+
+		if ((uint32)sd->status.zeny < price) {
+			clif_displaymessage(fd, "Market: You do not have enough Zeny.");
+			return;
+		}
+
+		intif_Market_bid(sd->status.char_id, market_id, price, sd->status.name);
+		return;
+	}
 
 	searchstore_click( *sd, p->AID, p->storeId, p->itemId );
 }

@@ -1,191 +1,28 @@
 //===== rAthena Script =======================================
-//= Custom Market Board v2.0
+//= Custom Market Board v3.0
 //= Production-ready auction system
 //===== Features: ============================================
 //= - RODEX delivery, 6% tax, Anti-Dupe (C++ side)
-//= - Input validation, pagination, type filter
-//= - Cancel listing (no bids only)
-//= - Own listing protection
+//= - Simplify — listing only. Search via client window.
 //============================================================
 
 -	script	MarketBoard	858,{
-OnTouch:
 	mes "[Market Board]";
 	mes "Welcome to the Global Market!";
+	mes "Search and Buy are now available via the ^0000FFMarket Search^000000 window.";
 	next;
 
 	.@char_id = strcharinfo(3);
 
 	while(1) {
 		mes "[Market Board]";
-		mes "What would you like to do?";
+		mes "Would you like to list an item for sale?";
 		next;
-		switch(select("Search & Buy:Sell Item:My Listings:Cancel")) {
+		if (select("Sell Item:My Listings:Cancel") == 3) close;
 
-		// =================== SEARCH & BUY ===================
-		case 1:
-			// Filter by type
-			mes "[Market Board]";
-			mes "Filter by item type:";
-			next;
-			.@type_sel = select("All Items:Weapons:Armor:Cards:Usable:Etc");
-
-			deletearray .@m_id;
-			deletearray .@i_name$;
-			deletearray .@price;
-			deletearray .@buy;
-			deletearray .@s_id;
-			deletearray .@refine;
-
-			if (.@type_sel == 1) {
-				query_sql("SELECT market_id, item_name, price, buynow, seller_id, refine FROM custom_market WHERE end_time > UNIX_TIMESTAMP() ORDER BY market_id DESC LIMIT 20",
-					.@m_id, .@i_name$, .@price, .@buy, .@s_id, .@refine);
-			} else {
-				// type: 0=usable,4=armor,5=weapon,6=card,7=etc (rAthena item types)
-				.@filter_type = 0;
-				if (.@type_sel == 2) .@filter_type = 5; // Weapons
-				if (.@type_sel == 3) .@filter_type = 4; // Armor
-				if (.@type_sel == 4) .@filter_type = 6; // Cards
-				if (.@type_sel == 5) .@filter_type = 0; // Usable
-				if (.@type_sel == 6) .@filter_type = 7; // Etc
-				query_sql("SELECT market_id, item_name, price, buynow, seller_id, refine FROM custom_market WHERE type = " + .@filter_type + " AND end_time > UNIX_TIMESTAMP() ORDER BY market_id DESC LIMIT 20",
-					.@m_id, .@i_name$, .@price, .@buy, .@s_id, .@refine);
-			}
-
-			.@count = getarraysize(.@m_id);
-			if (!.@count) {
-				mes "[Market Board]";
-				mes "No items found.";
-				next;
-				break;
-			}
-
-			// Build menu
-			.@list$ = "";
-			for (.@i = 0; .@i < .@count; .@i++) {
-				.@entry$ = .@i_name$[.@i];
-				if (.@refine[.@i] > 0) .@entry$ = "+" + .@refine[.@i] + " " + .@entry$;
-				.@entry$ = .@entry$ + " [" + .@price[.@i] + "z]";
-				.@list$ = .@list$ + .@entry$ + ":";
-			}
-			.@list$ = .@list$ + "Back";
-			.@s = select(.@list$);
-
-			if (.@s > .@count) break; // Back
-			.@idx = .@s - 1;
-
-			// Own listing check
-			if (.@s_id[.@idx] == .@char_id) {
-				mes "[Market Board]";
-				mes "You cannot bid on your own listing.";
-				next;
-				break;
-			}
-
-			mes "[Market Board]";
-			mes "Item: ^0000FF" + .@i_name$[.@idx] + "^000000";
-			if (.@refine[.@idx] > 0) mes "Refine: ^FF8800+" + .@refine[.@idx] + "^000000";
-			mes "Current Bid: ^FF0000" + .@price[.@idx] + " z^000000";
-			if (.@buy[.@idx] > 0) mes "Buy Now: ^00AA00" + .@buy[.@idx] + " z^000000";
-			mes "Your Zeny: ^888888" + Zeny + " z^000000";
-			next;
-
-			if (.@buy[.@idx] > 0) {
-				.@action = select("Place Bid:Buy Now (" + .@buy[.@idx] + "z):Cancel");
-			} else {
-				.@action = select("Place Bid:Cancel");
-				if (.@action == 2) break;
-				.@action = 1;
-			}
-
-			if (.@action == 3) break; // Cancel
-
-			if (.@action == 1) {
-				// Place Bid
-				mes "[Market Board]";
-				mes "Enter your bid amount:";
-				mes "(Current: " + .@price[.@idx] + " z)";
-				input .@bid;
-
-				if (.@bid <= 0) {
-					mes "[Market Board]";
-					mes "Invalid amount.";
-					next;
-					break;
-				}
-				if (.@bid <= .@price[.@idx]) {
-					mes "[Market Board]";
-					mes "Your bid must be higher than the current price.";
-					next;
-					break;
-				}
-				if (Zeny < .@bid) {
-					mes "[Market Board]";
-					mes "You don't have enough Zeny.";
-					next;
-					break;
-				}
-				// Ліміт ставки — не більше 1 млрд
-				if (.@bid > 1000000000) {
-					mes "[Market Board]";
-					mes "Bid cannot exceed 1,000,000,000 z.";
-					next;
-					break;
-				}
-
-				mes "[Market Board]";
-				mes "Confirm bid of ^FF0000" + .@bid + " z^000000 on ^0000FF" + .@i_name$[.@idx] + "^000000?";
-				next;
-				if (select("Confirm:Cancel") == 2) break;
-
-				if (market_bid(.@m_id[.@idx], .@bid)) {
-					mes "[Market Board]";
-					mes "Bid request sent!";
-					mes "You will be notified via RODEX if outbid or if you win.";
-				} else {
-					mes "[Market Board]";
-					mes "Failed to place bid. The listing may have expired.";
-				}
-				next;
-				break;
-			}
-
-			if (.@action == 2) {
-				// Buy Now
-				if (.@buy[.@idx] <= 0) {
-					mes "[Market Board]";
-					mes "This listing has no Buy Now price.";
-					next;
-					break;
-				}
-				if (Zeny < .@buy[.@idx]) {
-					mes "[Market Board]";
-					mes "You need ^FF0000" + .@buy[.@idx] + " z^000000 to buy now.";
-					next;
-					break;
-				}
-
-				mes "[Market Board]";
-				mes "Buy ^0000FF" + .@i_name$[.@idx] + "^000000 for ^00AA00" + .@buy[.@idx] + " z^000000?";
-				mes "(6% tax applied to seller)";
-				next;
-				if (select("Confirm:Cancel") == 2) break;
-
-				if (market_bid(.@m_id[.@idx], .@buy[.@idx])) {
-					mes "[Market Board]";
-					mes "Purchase request sent!";
-					mes "Item will be delivered via RODEX.";
-				} else {
-					mes "[Market Board]";
-					mes "Purchase failed. Item may have been sold already.";
-				}
-				next;
-				break;
-			}
-			break;
-
+		switch(@menu) {
 		// =================== SELL ITEM ===================
-		case 2:
+		case 1:
 			getinventorylist;
 			if (@inventorylist_count == 0) {
 				mes "[Market Board]";
@@ -212,7 +49,7 @@ OnTouch:
 			.@inv_idx = .@inv_s - 1;
 			.@item_index = @inventorylist_index[.@inv_idx];
 
-			// Перевірка чи предмет надягнутий
+			// Check equip
 			if (@inventorylist_equip[.@inv_idx] != 0) {
 				mes "[Market Board]";
 				mes "Please unequip the item first.";
@@ -220,7 +57,7 @@ OnTouch:
 				break;
 			}
 
-			// Перевірка bound
+			// Check bound
 			if (@inventorylist_bound[.@inv_idx] != 0) {
 				mes "[Market Board]";
 				mes "Bound items cannot be listed.";
@@ -288,7 +125,7 @@ OnTouch:
 			break;
 
 		// =================== MY LISTINGS ===================
-		case 3:
+		case 2:
 			deletearray .@my_id;
 			deletearray .@my_name$;
 			deletearray .@my_price;
@@ -320,7 +157,6 @@ OnTouch:
 			mes "Listing: ^0000FF" + .@my_name$[.@my_idx] + "^000000";
 			mes "Current Bid: ^FF0000" + .@my_price[.@my_idx] + " z^000000";
 
-			// Cancel дозволений тільки якщо немає ставок
 			if (.@my_buyer[.@my_idx] == 0) {
 				mes "No bids yet — you can cancel.";
 				next;
@@ -337,9 +173,6 @@ OnTouch:
 				next;
 			}
 			break;
-
-		case 4:
-			close;
 		}
 	}
 }
