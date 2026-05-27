@@ -115,25 +115,31 @@ void inter_market_fromsql(void) {
 	Sql_FreeResult(sql_handle);
 }
 
+void mapif_Market_purchase_ack(int32 fd, std::shared_ptr<struct market_data> market, uint8 result) {
+	int32 len = sizeof(struct market_data) + 5;
+	unsigned char* buf = (unsigned char*)aMalloc(len);
+
+	WBUFW(buf, 0) = 0x38B3;
+	WBUFW(buf, 2) = (uint16)len;
+	WBUFB(buf, 4) = result;
+	memcpy(WBUFP(buf, 5), market.get(), sizeof(struct market_data));
+
+	if (fd > 0)
+		chmapif_send(fd, buf, len);
+	else
+		chmapif_sendall(buf, len);
+
+	aFree(buf);
+}
+
 TIMER_FUNC(market_end_timer) {
 	auto market = util::umap_find(market_db, (uint32)id);
 	if (market == nullptr) return 0;
 
 	if (market->buyer_id > 0) {
-		// Calculate 6% tax
-		uint64 tax = (uint64)(market->price * 6 / 100);
-		uint64 seller_profit = market->price - tax;
-
-		if (seller_profit > MAX_ZENY)
-			seller_profit = MAX_ZENY;
-
-		// Deliver item to buyer
-		mail_sendmail(0, "Market System", market->buyer_id, market->buyer_name, "Market: Purchase Won", "You won the auction!", 0, &market->item, 1);
-		// Deliver Zeny to seller
-		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Item Sold", "Your item has been sold.", (uint32)seller_profit, nullptr, 0);
+		mapif_Market_purchase_ack(0, market, 0); // 0: Normal end/won
 	} else {
-		// Return item to seller
-		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: No Bidders", "Your auction ended with no bidders.", 0, &market->item, 1);
+		mapif_Market_purchase_ack(0, market, 1); // 1: No bidders
 	}
 
 	market->market_end_timer = INVALID_TIMER;
@@ -171,8 +177,9 @@ void mapif_Market_register(int32 fd, struct market_data* market) {
 		SqlStmt_ShowDebug(stmt);
 		Sql_QueryStr(sql_handle, "ROLLBACK");
 
-		// Return item to player via RODEX for safety
-		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Registration Failed", "Failed to list item. It has been returned.", 0, &market->item, 1);
+		auto market_ptr = std::make_shared<struct market_data>();
+		memcpy(market_ptr.get(), market, sizeof(struct market_data));
+		mapif_Market_purchase_ack(fd, market_ptr, 5); // 5: Registration failure
 
 		WFIFOHEAD(fd, 11);
 		WFIFOW(fd, 0) = 0x38B0;
@@ -225,7 +232,7 @@ void mapif_parse_Market_bid(int32 fd) {
 
 	// Refund previous bidder
 	if (market->buyer_id > 0) {
-		mail_sendmail(0, "Market System", market->buyer_id, market->buyer_name, "Market: Outbid", "You have been outbid. Zeny returned.", (uint32)market->price, nullptr, 0);
+		mapif_Market_purchase_ack(0, market, 4); // 4: Outbid
 	}
 
 	market->buyer_id = char_id;
@@ -235,14 +242,7 @@ void mapif_parse_Market_bid(int32 fd) {
 	if (market->buynow > 0 && market->price >= market->buynow) {
 		market->price = market->buynow;
 		// Instant win
-		uint64 tax = (uint64)(market->price * 6 / 100);
-		uint64 seller_profit = market->price - tax;
-
-		if (seller_profit > MAX_ZENY)
-			seller_profit = MAX_ZENY;
-
-		mail_sendmail(0, "Market System", market->buyer_id, market->buyer_name, "Market: Purchase Success", "Instant buy-now success!", 0, &market->item, 1);
-		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Item Sold", "Your item was bought instantly.", (uint32)seller_profit, nullptr, 0);
+		mapif_Market_purchase_ack(fd, market, 2); // 2: Instant win
 
 		Sql_QueryStr(sql_handle, "COMMIT");
 		market_delete(market);
@@ -274,8 +274,7 @@ void mapif_parse_Market_cancel(int32 fd) {
 		return;
 	}
 
-	// Return item to seller via RODEX
-	mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Listing Cancelled", "Your listing has been cancelled. Item returned.", 0, &market->item, 1);
+	mapif_Market_purchase_ack(fd, market, 3); // 3: Cancelled
 
 	market_delete(market);
 

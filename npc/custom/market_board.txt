@@ -140,7 +140,7 @@
 				if (!.@my_count) {
 					mes "You have no active listings.";
 					next;
-					break;
+					break; // Go back to main while(1) loop
 				}
 
 				.@my_list$ = "";
@@ -151,7 +151,7 @@
 				.@my_list$ = .@my_list$ + "Back";
 				.@my_s = select(.@my_list$);
 
-				if (.@my_s > .@my_count) break;
+				if (.@my_s > .@my_count) break; // Back to main menu
 				.@my_idx = .@my_s - 1;
 
 				mes "[Market Board]";
