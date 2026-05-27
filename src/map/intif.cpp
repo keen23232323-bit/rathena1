@@ -46,7 +46,7 @@ static const int32 packet_len_table[] = {
 	12,-1, 7, 3,  0, 0, 0, 0,  0, 0,-1, 9, -1, 0,  0, 0, //0x3880  Pet System,  Storages
 	-1,-1, 7, 3,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x3890  Homunculus [albator]
 	-1,-1, 8, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38A0  Clans
-	11,14, 7,-1,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38B0  Custom Market
+	11,15, 7,-1,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38B0  Custom Market
 };
 
 extern int32 char_fd; // inter server Fd used for char_fd
@@ -2995,26 +2995,17 @@ void intif_parse_Market_register_result(int32 fd) {
 void intif_parse_Market_bid_result(int32 fd) {
 	uint32 char_id = RFIFOL(fd, 2);
 	uint64 amount = RFIFOQ(fd, 6);
+	uint8 success = RFIFOB(fd, 14);
 
 	map_session_data* sd = map_charid2sd(char_id);
 	if (sd == nullptr) return;
 
-	if (amount == 0) {
-		clif_displaymessage(sd->fd, "Market: Bid failed. Item may have expired, been sold, or you are the seller.");
+	if (!success) {
+		pc_getzeny(sd, (int32)amount, LOG_TYPE_AUCTION);
+		clif_displaymessage(sd->fd, "Market: Bid failed. Item may have expired, been sold, or you are the seller. Zeny refunded.");
 		return;
 	}
 
-	if (amount > MAX_ZENY) {
-		ShowError("Market: Invalid bid amount %" PRIu64 " for player %s (%d)!\n", amount, sd->status.name, char_id);
-		return;
-	}
-
-	if ((uint64)sd->status.zeny < amount) {
-		ShowError("Market: Player %s (%d) has insufficient zeny (%d < %" PRIu64 ") for accepted bid!\n", sd->status.name, char_id, sd->status.zeny, amount);
-		return;
-	}
-
-	pc_payzeny(sd, (int32)amount, LOG_TYPE_AUCTION);
 	clif_displaymessage(sd->fd, "Market: Bid placed successfully.");
 }
 

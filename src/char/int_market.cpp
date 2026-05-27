@@ -219,11 +219,12 @@ void mapif_parse_Market_bid(int32 fd) {
 	auto market = util::umap_find(market_db, market_id);
 
 	if (market == nullptr || market->seller_id == (int32)char_id || (bid_amount < market->price + market->bid_step && bid_amount < market->buynow)) {
-		WFIFOHEAD(fd, 10);
+		WFIFOHEAD(fd, 15);
 		WFIFOW(fd, 0) = 0x38B1;
 		WFIFOL(fd, 2) = char_id;
-		WFIFOL(fd, 6) = 0; // failure
-		WFIFOSET(fd, 10);
+		WFIFOQ(fd, 6) = bid_amount;
+		WFIFOB(fd, 14) = 0; // failure
+		WFIFOSET(fd, 15);
 		return;
 	}
 
@@ -251,12 +252,13 @@ void mapif_parse_Market_bid(int32 fd) {
 		Sql_QueryStr(sql_handle, "COMMIT");
 	}
 
-	// Notify success - deduct zeny on map server
-	WFIFOHEAD(fd, 14);
+	// Notify success
+	WFIFOHEAD(fd, 15);
 	WFIFOW(fd, 0) = 0x38B1;
 	WFIFOL(fd, 2) = char_id;
 	WFIFOQ(fd, 6) = bid_amount;
-	WFIFOSET(fd, 14);
+	WFIFOB(fd, 14) = 1; // success
+	WFIFOSET(fd, 15);
 }
 
 void mapif_parse_Market_cancel(int32 fd) {
