@@ -19647,7 +19647,9 @@ static void clif_parse_SearchStoreInfoListItemClick( int32 fd, map_session_data*
 			return;
 		}
 
-		intif_Market_bid(sd->status.char_id, market_id, price, sd->status.name);
+		if (!intif_Market_bid(sd->status.char_id, market_id, price, sd->status.name)) {
+			clif_displaymessage(fd, "Market: Communication error with Char-Server.");
+		}
 		return;
 	}
 

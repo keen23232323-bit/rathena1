@@ -3012,6 +3012,7 @@ void intif_parse_Market_bid_result(int32 fd) {
 
 	if ((uint64)sd->status.zeny < amount) {
 		ShowError("Market: Player %s (%d) has insufficient zeny (%d < %" PRIu64 ") for accepted bid!\n", sd->status.name, char_id, sd->status.zeny, amount);
+		clif_displaymessage(sd->fd, "Market: Transaction failed - insufficient funds.");
 		return;
 	}
 
