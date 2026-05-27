@@ -698,6 +698,7 @@ struct auction_data {
 struct market_data {
 	uint32 market_id;
 	int32 seller_id;
+	int32 seller_account;
 	char seller_name[NAME_LENGTH];
 	int32 buyer_id;
 	char buyer_name[NAME_LENGTH];
@@ -706,7 +707,7 @@ struct market_data {
 	char item_name[ITEM_NAME_LENGTH];
 	int16 type;
 
-	uint32 price, buynow, bid_step;
+	uint64 price, buynow, bid_step;
 	time_t timestamp;
 	int32 market_end_timer;
 };

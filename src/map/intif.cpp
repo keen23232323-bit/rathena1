@@ -46,7 +46,7 @@ static const int32 packet_len_table[] = {
 	12,-1, 7, 3,  0, 0, 0, 0,  0, 0,-1, 9, -1, 0,  0, 0, //0x3880  Pet System,  Storages
 	-1,-1, 7, 3,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x3890  Homunculus [albator]
 	-1,-1, 8, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38A0  Clans
-	11,10, 7, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38B0  Custom Market
+	11,14, 7, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38B0  Custom Market
 };
 
 extern int32 char_fd; // inter server Fd used for char_fd
@@ -2062,16 +2062,16 @@ int32 intif_Market_register(struct market_data *market) {
 	return 1;
 }
 
-int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint32 bid, const char* name) {
+int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint64 bid, const char* name) {
 	if(CheckForCharServer()) return 0;
 
-	WFIFOHEAD(inter_fd, 14 + NAME_LENGTH);
+	WFIFOHEAD(inter_fd, 18 + NAME_LENGTH);
 	WFIFOW(inter_fd, 0) = 0x30B5;
 	WFIFOL(inter_fd, 2) = char_id;
 	WFIFOL(inter_fd, 6) = market_id;
-	WFIFOL(inter_fd, 10) = bid;
-	safestrncpy(WFIFOCP(inter_fd, 14), name, NAME_LENGTH);
-	WFIFOSET(inter_fd, 14 + NAME_LENGTH);
+	WFIFOQ(inter_fd, 10) = bid;
+	safestrncpy(WFIFOCP(inter_fd, 18), name, NAME_LENGTH);
+	WFIFOSET(inter_fd, 18 + NAME_LENGTH);
 	return 1;
 }
 
@@ -2989,12 +2989,16 @@ void intif_parse_Market_register_result(int32 fd) {
 
 	if (!success) {
 		ShowWarning("Market: Failed to register item for char_id %u.\n", char_id);
+		map_session_data* sd = map_charid2sd(char_id);
+		if (sd) {
+			clif_displaymessage(sd->fd, "Market: Registration failed. Your item was returned via RODEX.");
+		}
 	}
 }
 
 void intif_parse_Market_bid_result(int32 fd) {
 	uint32 char_id = RFIFOL(fd, 2);
-	uint32 amount = RFIFOL(fd, 6);
+	uint64 amount = RFIFOQ(fd, 6);
 
 	map_session_data* sd = map_charid2sd(char_id);
 	if (sd == nullptr) return;

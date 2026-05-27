@@ -46,7 +46,7 @@ void market_save(std::shared_ptr<struct market_data> market) {
 	SqlStmt stmt{ *sql_handle };
 
 	StringBuf_Init(&buf);
-	StringBuf_Printf(&buf, "UPDATE `custom_market` SET `buyer_id` = '%d', `buyer_name` = ?, `price` = '%u' WHERE `market_id` = '%u'",
+	StringBuf_Printf(&buf, "UPDATE `custom_market` SET `buyer_id` = '%d', `buyer_name` = ?, `price` = '%" PRIu64 "' WHERE `market_id` = '%u'",
 		market->buyer_id, market->price, market->market_id);
 
 	if (SQL_SUCCESS != stmt.PrepareStr(StringBuf_Value(&buf))
@@ -61,7 +61,7 @@ void inter_market_fromsql(void) {
 	time_t now = time(nullptr);
 	t_tick tick = gettick();
 
-	if (SQL_ERROR == Sql_Query(sql_handle, "SELECT `market_id`,`seller_id`,`seller_name`,`buyer_id`,`buyer_name`,`price`,`buynow`,`bid_step`,`end_time`,`nameid`,`item_name`,`type`,`refine`,`attribute`,`unique_id`,`enchantgrade`,`card0`,`card1`,`card2`,`card3`,`option_id0`,`option_val0`,`option_parm0`,`option_id1`,`option_val1`,`option_parm1`,`option_id2`,`option_val2`,`option_parm2`,`option_id3`,`option_val3`,`option_parm3`,`option_id4`,`option_val4`,`option_parm4` FROM `custom_market`")) {
+	if (SQL_ERROR == Sql_Query(sql_handle, "SELECT `market_id`,`seller_id`,`seller_account`,`seller_name`,`buyer_id`,`buyer_name`,`price`,`buynow`,`bid_step`,`end_time`,`nameid`,`item_name`,`type`,`refine`,`attribute`,`identify`,`expire_time`,`bound`,`unique_id`,`enchantgrade`,`card0`,`card1`,`card2`,`card3`,`option_id0`,`option_val0`,`option_parm0`,`option_id1`,`option_val1`,`option_parm1`,`option_id2`,`option_val2`,`option_parm2`,`option_id3`,`option_val3`,`option_parm3`,`option_id4`,`option_val4`,`option_parm4` FROM `custom_market`")) {
 		Sql_ShowDebug(sql_handle);
 		return;
 	}
@@ -70,35 +70,37 @@ void inter_market_fromsql(void) {
 		auto market = std::make_shared<struct market_data>();
 		Sql_GetData(sql_handle, 0, &data, nullptr); market->market_id = atoi(data);
 		Sql_GetData(sql_handle, 1, &data, nullptr); market->seller_id = atoi(data);
-		Sql_GetData(sql_handle, 2, &data, nullptr); safestrncpy(market->seller_name, data, NAME_LENGTH);
-		Sql_GetData(sql_handle, 3, &data, nullptr); market->buyer_id = atoi(data);
-		Sql_GetData(sql_handle, 4, &data, nullptr); safestrncpy(market->buyer_name, data, NAME_LENGTH);
-		Sql_GetData(sql_handle, 5, &data, nullptr); market->price = (uint32)strtoul(data, nullptr, 10);
-		Sql_GetData(sql_handle, 6, &data, nullptr); market->buynow = (uint32)strtoul(data, nullptr, 10);
-		Sql_GetData(sql_handle, 7, &data, nullptr); market->bid_step = (uint32)strtoul(data, nullptr, 10);
-		Sql_GetData(sql_handle, 8, &data, nullptr); market->timestamp = (time_t)atoll(data);
+		Sql_GetData(sql_handle, 2, &data, nullptr); market->seller_account = atoi(data);
+		Sql_GetData(sql_handle, 3, &data, nullptr); safestrncpy(market->seller_name, data, NAME_LENGTH);
+		Sql_GetData(sql_handle, 4, &data, nullptr); market->buyer_id = atoi(data);
+		Sql_GetData(sql_handle, 5, &data, nullptr); safestrncpy(market->buyer_name, data, NAME_LENGTH);
+		Sql_GetData(sql_handle, 6, &data, nullptr); market->price = (uint64)strtoull(data, nullptr, 10);
+		Sql_GetData(sql_handle, 7, &data, nullptr); market->buynow = (uint64)strtoull(data, nullptr, 10);
+		Sql_GetData(sql_handle, 8, &data, nullptr); market->bid_step = (uint64)strtoull(data, nullptr, 10);
+		Sql_GetData(sql_handle, 9, &data, nullptr); market->timestamp = (time_t)atoll(data);
 
 		struct item* item = &market->item;
-		Sql_GetData(sql_handle, 9, &data, nullptr); item->nameid = (t_itemid)strtoul(data, nullptr, 10);
-		Sql_GetData(sql_handle, 10, &data, nullptr); safestrncpy(market->item_name, data, ITEM_NAME_LENGTH);
-		Sql_GetData(sql_handle, 11, &data, nullptr); market->type = atoi(data);
-		Sql_GetData(sql_handle, 12, &data, nullptr); item->refine = atoi(data);
-		Sql_GetData(sql_handle, 13, &data, nullptr); item->attribute = atoi(data);
-		Sql_GetData(sql_handle, 14, &data, nullptr); item->unique_id = strtoull(data, nullptr, 10);
-		Sql_GetData(sql_handle, 15, &data, nullptr); item->enchantgrade = atoi(data);
+		Sql_GetData(sql_handle, 10, &data, nullptr); item->nameid = (t_itemid)strtoul(data, nullptr, 10);
+		Sql_GetData(sql_handle, 11, &data, nullptr); safestrncpy(market->item_name, data, ITEM_NAME_LENGTH);
+		Sql_GetData(sql_handle, 12, &data, nullptr); market->type = atoi(data);
+		Sql_GetData(sql_handle, 13, &data, nullptr); item->refine = atoi(data);
+		Sql_GetData(sql_handle, 14, &data, nullptr); item->attribute = atoi(data);
+		Sql_GetData(sql_handle, 15, &data, nullptr); item->identify = atoi(data);
+		Sql_GetData(sql_handle, 16, &data, nullptr); item->expire_time = (uint32)strtoul(data, nullptr, 10);
+		Sql_GetData(sql_handle, 17, &data, nullptr); item->bound = atoi(data);
+		Sql_GetData(sql_handle, 18, &data, nullptr); item->unique_id = strtoull(data, nullptr, 10);
+		Sql_GetData(sql_handle, 19, &data, nullptr); item->enchantgrade = atoi(data);
 
 		for (int i = 0; i < 4; i++) {
-			Sql_GetData(sql_handle, 16 + i, &data, nullptr);
+			Sql_GetData(sql_handle, 20 + i, &data, nullptr);
 			item->card[i] = (t_itemid)strtoul(data, nullptr, 10);
 		}
 
 		for (int i = 0; i < 5; i++) {
-			Sql_GetData(sql_handle, 20 + i*3, &data, nullptr); item->option[i].id = atoi(data);
-			Sql_GetData(sql_handle, 21 + i*3, &data, nullptr); item->option[i].value = atoi(data);
-			Sql_GetData(sql_handle, 22 + i*3, &data, nullptr); item->option[i].param = atoi(data);
+			Sql_GetData(sql_handle, 24 + i*3, &data, nullptr); item->option[i].id = atoi(data);
+			Sql_GetData(sql_handle, 25 + i*3, &data, nullptr); item->option[i].value = atoi(data);
+			Sql_GetData(sql_handle, 26 + i*3, &data, nullptr); item->option[i].param = atoi(data);
 		}
-
-		item->identify = 1;
 		item->amount = 1;
 
 		t_tick end_tick;
@@ -119,13 +121,16 @@ TIMER_FUNC(market_end_timer) {
 
 	if (market->buyer_id > 0) {
 		// Calculate 6% tax
-		uint32 tax = (uint32)((uint64)market->price * 6 / 100);
-		uint32 seller_profit = market->price - tax;
+		uint64 tax = (uint64)(market->price * 6 / 100);
+		uint64 seller_profit = market->price - tax;
+
+		if (seller_profit > MAX_ZENY)
+			seller_profit = MAX_ZENY;
 
 		// Deliver item to buyer
 		mail_sendmail(0, "Market System", market->buyer_id, market->buyer_name, "Market: Purchase Won", "You won the auction!", 0, &market->item, 1);
 		// Deliver Zeny to seller
-		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Item Sold", "Your item has been sold.", seller_profit, nullptr, 0);
+		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Item Sold", "Your item has been sold.", (uint32)seller_profit, nullptr, 0);
 	} else {
 		// Return item to seller
 		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: No Bidders", "Your auction ended with no bidders.", 0, &market->item, 1);
@@ -146,10 +151,10 @@ void mapif_Market_register(int32 fd, struct market_data* market) {
 	Sql_QueryStr(sql_handle, "START TRANSACTION");
 
 	StringBuf_Init(&buf);
-	StringBuf_Printf(&buf, "INSERT INTO `custom_market` (`seller_id`,`seller_name`,`price`,`buynow`,`bid_step`,`end_time`,`nameid`,`item_name`,`type`,`refine`,`attribute`,`unique_id`,`enchantgrade`,`card0`,`card1`,`card2`,`card3`"
+	StringBuf_Printf(&buf, "INSERT INTO `custom_market` (`seller_id`,`seller_account`,`seller_name`,`price`,`buynow`,`bid_step`,`end_time`,`nameid`,`item_name`,`type`,`refine`,`attribute`,`identify`,`expire_time`,`bound`,`unique_id`,`enchantgrade`,`card0`,`card1`,`card2`,`card3`"
 		",`option_id0`,`option_val0`,`option_parm0`,`option_id1`,`option_val1`,`option_parm1`,`option_id2`,`option_val2`,`option_parm2`,`option_id3`,`option_val3`,`option_parm3`,`option_id4`,`option_val4`,`option_parm4`"
-		") VALUES ('%d',?,'%u','%u','%u','%lu','%u',?,'%d','%d','%d','%" PRIu64 "','%d'",
-		market->seller_id, market->price, market->buynow, market->bid_step, (unsigned long)market->timestamp, market->item.nameid, market->type, market->item.refine, market->item.attribute, market->item.unique_id, market->item.enchantgrade);
+		") VALUES ('%d','%d',?,'%" PRIu64 "','%" PRIu64 "','%" PRIu64 "','%lu','%u',?,'%d','%d','%d','%d','%u','%d','%" PRIu64 "','%d'",
+		market->seller_id, market->seller_account, market->seller_name, market->price, market->buynow, market->bid_step, (unsigned long)market->timestamp, market->item.nameid, market->type, market->item.refine, market->item.attribute, market->item.identify, market->item.expire_time, market->item.bound, market->item.unique_id, market->item.enchantgrade);
 
 	for(j = 0; j < 4; j++) StringBuf_Printf(&buf, ",'%u'", market->item.card[j]);
 	for(j = 0; j < 5; j++) {
@@ -200,9 +205,9 @@ void mapif_Market_register(int32 fd, struct market_data* market) {
 void mapif_parse_Market_bid(int32 fd) {
 	uint32 char_id = RFIFOL(fd, 2);
 	uint32 market_id = RFIFOL(fd, 6);
-	uint32 bid_amount = RFIFOL(fd, 10);
+	uint64 bid_amount = RFIFOQ(fd, 10);
 	char bidder_name[NAME_LENGTH];
-	safestrncpy(bidder_name, (char*)RFIFOP(fd, 14), NAME_LENGTH);
+	safestrncpy(bidder_name, (char*)RFIFOP(fd, 18), NAME_LENGTH);
 
 	auto market = util::umap_find(market_db, market_id);
 
@@ -220,19 +225,24 @@ void mapif_parse_Market_bid(int32 fd) {
 
 	// Refund previous bidder
 	if (market->buyer_id > 0) {
-		mail_sendmail(0, "Market System", market->buyer_id, market->buyer_name, "Market: Outbid", "You have been outbid. Zeny returned.", market->price, nullptr, 0);
+		mail_sendmail(0, "Market System", market->buyer_id, market->buyer_name, "Market: Outbid", "You have been outbid. Zeny returned.", (uint32)market->price, nullptr, 0);
 	}
 
 	market->buyer_id = char_id;
 	safestrncpy(market->buyer_name, bidder_name, NAME_LENGTH);
-	market->price = bid_amount;
+	market->price = (uint64)bid_amount;
 
-	if (market->buynow > 0 && bid_amount >= market->buynow) {
+	if (market->buynow > 0 && market->price >= market->buynow) {
 		market->price = market->buynow;
 		// Instant win
-		uint32 tax = (uint32)((uint64)market->price * 6 / 100);
+		uint64 tax = (uint64)(market->price * 6 / 100);
+		uint64 seller_profit = market->price - tax;
+
+		if (seller_profit > MAX_ZENY)
+			seller_profit = MAX_ZENY;
+
 		mail_sendmail(0, "Market System", market->buyer_id, market->buyer_name, "Market: Purchase Success", "Instant buy-now success!", 0, &market->item, 1);
-		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Item Sold", "Your item was bought instantly.", market->price - tax, nullptr, 0);
+		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Item Sold", "Your item was bought instantly.", (uint32)seller_profit, nullptr, 0);
 
 		Sql_QueryStr(sql_handle, "COMMIT");
 		market_delete(market);
@@ -242,11 +252,11 @@ void mapif_parse_Market_bid(int32 fd) {
 	}
 
 	// Notify success - deduct zeny on map server
-	WFIFOHEAD(fd, 10);
+	WFIFOHEAD(fd, 14);
 	WFIFOW(fd, 0) = 0x38B1;
 	WFIFOL(fd, 2) = char_id;
-	WFIFOL(fd, 6) = bid_amount;
-	WFIFOSET(fd, 10);
+	WFIFOQ(fd, 6) = bid_amount;
+	WFIFOSET(fd, 14);
 }
 
 void mapif_parse_Market_cancel(int32 fd) {
