@@ -68,6 +68,7 @@ int32 inter_recv_packet_length[] = {
 	52,14,-1, 6,  0, 0, 0, 0,  0, 0,13,-1,  0, 0,  0, 0,	// 3080-  Pet System, Storage
 	-1,10,-1, 6,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0,	// 3090-  Homunculus packets [albator]
 	 2,-1, 6, 6,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0,	// 30A0-  Clan packets
+	 0, 0, 0, 0, -1, 38, 10, 0,  0, 0, 0, 0,  0, 0,  0, 0,	// 30B0-  Market packets (0x30B4-0x30B6)
 };
 
 #ifndef WHISPER_MESSAGE_SIZE

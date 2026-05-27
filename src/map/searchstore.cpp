@@ -201,6 +201,77 @@ void searchstore_query(map_session_data& sd, e_searchstore_searchtype type, uint
 
 	dbi_destroy(iter);
 
+	// Custom Market Search
+	if (type == SEARCHTYPE_VENDING && sd.searchstore.items.size() < (uint32)battle_config.searchstore_maxresults) {
+		std::string item_ids_str = "";
+		for (i = 0; i < item_count; i++) {
+			item_ids_str += std::to_string(itemlist[i].itemId);
+			if (i < item_count - 1) item_ids_str += ",";
+		}
+
+		if (!item_ids_str.empty()) {
+			if (SQL_ERROR != Sql_Query(mmysql_handle,
+				"SELECT market_id, seller_id, seller_name, nameid, price, refine, enchantgrade, card0, card1, card2, card3, amount "
+				"FROM custom_market "
+				"WHERE nameid IN (%s) "
+				"AND end_time > UNIX_TIMESTAMP() "
+				"AND (price >= %u AND price <= %u) "
+				"LIMIT %d",
+				item_ids_str.c_str(), min_price, max_price, battle_config.searchstore_maxresults - (int)sd.searchstore.items.size()))
+			{
+				while (SQL_SUCCESS == Sql_NextRow(mmysql_handle)) {
+					char* data;
+					t_itemid nameid;
+					Sql_GetData(mmysql_handle, 3, &data, nullptr); nameid = (t_itemid)strtoul(data, nullptr, 10);
+
+					// Card filter logic
+					t_itemid cards[MAX_SLOTS];
+					for (int j = 0; j < MAX_SLOTS; j++) {
+						Sql_GetData(mmysql_handle, 7 + j, &data, nullptr); cards[j] = (t_itemid)strtoul(data, nullptr, 10);
+					}
+
+					if (card_count > 0) {
+						bool found = false;
+						int slot = itemdb_slots(nameid);
+						for (int c = 0; c < slot && cards[c]; c++) {
+							for (uint32 cidx = 0; cidx < card_count; cidx++) {
+								if (cardlist[cidx].itemId == cards[c]) {
+									found = true;
+									break;
+								}
+							}
+							if (found) break;
+						}
+						if (!found) continue;
+					}
+
+					auto ssitem = std::make_shared<s_search_store_info_item>();
+					Sql_GetData(mmysql_handle, 0, &data, nullptr); ssitem->store_id = (int32)(strtoul(data, nullptr, 10) | CUSTOM_MARKET_STORE_ID_OFFSET);
+					Sql_GetData(mmysql_handle, 1, &data, nullptr); ssitem->account_id = (uint32)atoi(data);
+					Sql_GetData(mmysql_handle, 2, &data, nullptr); safestrncpy(ssitem->store_name, data, sizeof(ssitem->store_name));
+					if (strstr(ssitem->store_name, " [Market]") == nullptr) {
+						size_t len = strlen(ssitem->store_name);
+						if (len + 10 < sizeof(ssitem->store_name))
+							safestrncpy(ssitem->store_name + len, " [Market]", sizeof(ssitem->store_name) - len);
+					}
+					ssitem->nameid = nameid;
+					Sql_GetData(mmysql_handle, 4, &data, nullptr); ssitem->price = (uint32)strtoul(data, nullptr, 10);
+					Sql_GetData(mmysql_handle, 5, &data, nullptr); ssitem->refine = (unsigned char)atoi(data);
+					Sql_GetData(mmysql_handle, 6, &data, nullptr); ssitem->enchantgrade = (uint8)atoi(data);
+					for (int j = 0; j < MAX_SLOTS; j++) ssitem->card[j] = cards[j];
+					Sql_GetData(mmysql_handle, 11, &data, nullptr); ssitem->amount = (uint16)atoi(data);
+
+					if (ssitem->account_id != sd.status.char_id) // Skip own listings (account_id field here contains char_id)
+						sd.searchstore.items.push_back(ssitem);
+
+					if (sd.searchstore.items.size() >= (uint32)battle_config.searchstore_maxresults)
+						break;
+				}
+				Sql_FreeResult(mmysql_handle);
+			}
+		}
+	}
+
 	if( !sd.searchstore.items.empty() ) {
 		// present results
 		clif_search_store_info_ack( sd );

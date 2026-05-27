@@ -118,43 +118,6 @@ int32 intif_create_pet(uint32 account_id,uint32 char_id,int16 pet_class,int16 pe
 	return 1;
 }
 
-int32 intif_Market_register(struct market_data *market) {
-	int32 len = sizeof(struct market_data) + 4;
-
-	if(CheckForCharServer()) return 0;
-
-	WFIFOHEAD(inter_fd, len);
-	WFIFOW(inter_fd, 0) = 0x3060;
-	WFIFOW(inter_fd, 2) = len;
-	memcpy(WFIFOP(inter_fd, 4), market, sizeof(struct market_data));
-	WFIFOSET(inter_fd, len);
-	return 1;
-}
-
-int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint32 bid, const char* name) {
-	if(CheckForCharServer()) return 0;
-
-	WFIFOHEAD(inter_fd, 14 + NAME_LENGTH);
-	WFIFOW(inter_fd, 0) = 0x3061;
-	WFIFOL(inter_fd, 2) = char_id;
-	WFIFOL(inter_fd, 6) = market_id;
-	WFIFOL(inter_fd, 10) = bid;
-	safestrncpy(WFIFOCP(inter_fd, 14), name, NAME_LENGTH);
-	WFIFOSET(inter_fd, 14 + NAME_LENGTH);
-	return 1;
-}
-
-int32 intif_Market_cancel(uint32 char_id, uint32 market_id) {
-	if(CheckForCharServer()) return 0;
-
-	WFIFOHEAD(inter_fd, 10);
-	WFIFOW(inter_fd, 0) = 0x3062;
-	WFIFOL(inter_fd, 2) = char_id;
-	WFIFOL(inter_fd, 6) = market_id;
-	WFIFOSET(inter_fd, 10);
-	return 1;
-}
-
 /**
  * Request char-serv to load a pet from persistence (SQL)
  * @param account_id
@@ -2084,6 +2047,43 @@ void intif_request_questlog(map_session_data *sd)
 	WFIFOW(inter_fd,0) = 0x3060;
 	WFIFOL(inter_fd,2) = sd->status.char_id;
 	WFIFOSET(inter_fd,6);
+}
+
+int32 intif_Market_register(struct market_data *market) {
+	int32 len = sizeof(struct market_data) + 4;
+
+	if(CheckForCharServer()) return 0;
+
+	WFIFOHEAD(inter_fd, len);
+	WFIFOW(inter_fd, 0) = 0x30B4;
+	WFIFOW(inter_fd, 2) = len;
+	memcpy(WFIFOP(inter_fd, 4), market, sizeof(struct market_data));
+	WFIFOSET(inter_fd, len);
+	return 1;
+}
+
+int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint32 bid, const char* name) {
+	if(CheckForCharServer()) return 0;
+
+	WFIFOHEAD(inter_fd, 14 + NAME_LENGTH);
+	WFIFOW(inter_fd, 0) = 0x30B5;
+	WFIFOL(inter_fd, 2) = char_id;
+	WFIFOL(inter_fd, 6) = market_id;
+	WFIFOL(inter_fd, 10) = bid;
+	safestrncpy(WFIFOCP(inter_fd, 14), name, NAME_LENGTH);
+	WFIFOSET(inter_fd, 14 + NAME_LENGTH);
+	return 1;
+}
+
+int32 intif_Market_cancel(uint32 char_id, uint32 market_id) {
+	if(CheckForCharServer()) return 0;
+
+	WFIFOHEAD(inter_fd, 10);
+	WFIFOW(inter_fd, 0) = 0x30B6;
+	WFIFOL(inter_fd, 2) = char_id;
+	WFIFOL(inter_fd, 6) = market_id;
+	WFIFOSET(inter_fd, 10);
+	return 1;
 }
 
 /**

@@ -8123,6 +8123,13 @@ BUILDIN_FUNC(market_list_item) {
 		return SCRIPT_CMD_SUCCESS;
 	}
 
+	// Security: Anti-Dupe checks
+	if (pc_istrading(sd) || sd->state.vending || sd->state.buyingstore) {
+		ShowWarning("market_list_item: Player %s (AID:%d) attempted to list item while in trade/vending/buyingstore.\n", sd->status.name, sd->status.account_id);
+		script_pushint(st, 0);
+		return SCRIPT_CMD_SUCCESS;
+	}
+
 	memset(&market, 0, sizeof(struct market_data));
 	market.seller_id = sd->status.char_id;
 	safestrncpy(market.seller_name, sd->status.name, NAME_LENGTH);
