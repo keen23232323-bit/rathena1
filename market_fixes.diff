@@ -1,0 +1,813 @@
+diff --git a/npc/custom/market_board.txt b/npc/custom/market_board.txt
+index d981bc3..29210ac 100644
+--- a/npc/custom/market_board.txt
++++ b/npc/custom/market_board.txt
+@@ -1,5 +1,5 @@
+ //===== rAthena Script =======================================
+-//= Custom Market Board v3.0
++//= Custom Market Board v3.1
+ //= Production-ready auction system
+ //===== Features: ============================================
+ //= - RODEX delivery, 6% tax, Anti-Dupe (C++ side)
+@@ -12,7 +12,7 @@
+	mes "Search and Buy are now available via the ^0000FFMarket Search^000000 window.";
+	next;
+
+-	.@char_id = strcharinfo(3);
++	.@char_id = getcharid(0);
+
+	while(1) {
+		mes "[Market Board]";
+@@ -24,7 +24,7 @@
+		// =================== SELL ITEM ===================
+		case 1:
+			getinventorylist;
+-			if (@inventorylist_count == 0) {
++			if (getarraysize(@inventorylist_id) == 0) {
+				mes "[Market Board]";
+				mes "Your inventory is empty.";
+				next;
+@@ -36,7 +36,7 @@
+			next;
+
+			.@inv_list$ = "";
+-			for (.@i = 0; .@i < @inventorylist_count; .@i++) {
++			for (.@i = 0; .@i < getarraysize(@inventorylist_id); .@i++) {
+				.@iname$ = getitemname(@inventorylist_id[.@i]);
+				if (@inventorylist_refine[.@i] > 0)
+					.@iname$ = "+" + @inventorylist_refine[.@i] + " " + .@iname$;
+@@ -45,7 +45,7 @@
+			.@inv_list$ = .@inv_list$ + "Cancel";
+			.@inv_s = select(.@inv_list$);
+
+-			if (.@inv_s > @inventorylist_count) break; // Cancel
++			if (.@inv_s > getarraysize(@inventorylist_id)) break; // Cancel
+			.@inv_idx = .@inv_s - 1;
+			.@item_index = @inventorylist_index[.@inv_idx];
+
+@@ -126,51 +126,55 @@
+
+		// =================== MY LISTINGS ===================
+		case 2:
+-			deletearray .@my_id;
+-			deletearray .@my_name$;
+-			deletearray .@my_price;
+-			deletearray .@my_buyer;
++			while(1) {
++				deletearray .@my_id;
++				deletearray .@my_name$;
++				deletearray .@my_price;
++				deletearray .@my_buyer;
+
+-			query_sql("SELECT market_id, item_name, price, buyer_id FROM custom_market WHERE seller_id = " + .@char_id + " AND end_time > UNIX_TIMESTAMP() ORDER BY market_id DESC",
+-				.@my_id, .@my_name$, .@my_price, .@my_buyer);
+-			.@my_count = getarraysize(.@my_id);
++				query_sql("SELECT market_id, item_name, price, buyer_id FROM custom_market WHERE seller_id = " + .@char_id + " AND end_time > UNIX_TIMESTAMP() ORDER BY market_id DESC",
++					.@my_id, .@my_name$, .@my_price, .@my_buyer);
++				.@my_count = getarraysize(.@my_id);
+
+-			mes "[Market Board]";
+-			if (!.@my_count) {
+-				mes "You have no active listings.";
+-				next;
+-				break;
+-			}
++				mes "[Market Board]";
++				if (!.@my_count) {
++					mes "You have no active listings.";
++					next;
++					break; // Go back to main while(1) loop
++				}
+
+-			.@my_list$ = "";
+-			for (.@i = 0; .@i < .@my_count; .@i++) {
+-				.@status$ = .@my_buyer[.@i] > 0 ? "[Has Bid]" : "[No Bids]";
+-				.@my_list$ = .@my_list$ + .@my_name$[.@i] + " " + .@status$ + " - " + .@my_price[.@i] + "z:";
+-			}
+-			.@my_list$ = .@my_list$ + "Back";
+-			.@my_s = select(.@my_list$);
++				.@my_list$ = "";
++				for (.@i = 0; .@i < .@my_count; .@i++) {
++					.@status$ = .@my_buyer[.@i] > 0 ? "[Has Bid]" : "[No Bids]";
++					.@my_list$ = .@my_list$ + .@my_name$[.@i] + " " + .@status$ + " - " + .@my_price[.@i] + "z:";
++				}
++				.@my_list$ = .@my_list$ + "Back";
++				.@my_s = select(.@my_list$);
+
+-			if (.@my_s > .@my_count) break;
+-			.@my_idx = .@my_s - 1;
++				if (.@my_s > .@my_count) break; // Back to main menu
++				.@my_idx = .@my_s - 1;
+
+-			mes "[Market Board]";
+-			mes "Listing: ^0000FF" + .@my_name$[.@my_idx] + "^000000";
+-			mes "Current Bid: ^FF0000" + .@my_price[.@my_idx] + " z^000000";
++				mes "[Market Board]";
++				mes "Listing: ^0000FF" + .@my_name$[.@my_idx] + "^000000";
++				mes "Current Price: ^FF0000" + .@my_price[.@my_idx] + " z^000000";
+
+-			if (.@my_buyer[.@my_idx] == 0) {
+-				mes "No bids yet — you can cancel.";
+-				next;
+-				if (select("Cancel Listing:Back") == 1) {
+-					if (market_cancel(.@my_id[.@my_idx])) {
+-						mes "Listing cancel request sent.";
+-					} else {
+-						mes "Failed to send cancel request.";
++				if (.@my_buyer[.@my_idx] == 0) {
++					mes "No bids yet — you can cancel.";
++					next;
++					if (select("Cancel Listing:Back") == 1) {
++						if (market_cancel(.@my_id[.@my_idx])) {
++							mes "[Market Board]";
++							mes "Listing cancelled. Item returned via RODEX.";
++						} else {
++							mes "[Market Board]";
++							mes "Failed to cancel listing.";
++						}
++						next;
+					}
++				} else {
++					mes "Bidding is active — cannot cancel.";
+					next;
+				}
+-			} else {
+-				mes "Bidding is active — cannot cancel.";
+-				next;
+			}
+			break;
+		}
+diff --git a/sql-files/custom_market.sql b/sql-files/custom_market.sql
+index f9212f9..e9bed4b 100644
+--- a/sql-files/custom_market.sql
++++ b/sql-files/custom_market.sql
+@@ -1,18 +1,23 @@
+ CREATE TABLE IF NOT EXISTS `custom_market` (
+   `market_id` bigint(20) unsigned NOT NULL auto_increment,
+   `seller_id` int(11) unsigned NOT NULL default '0',
++  `seller_account` int(11) unsigned NOT NULL default '0',
+   `seller_name` varchar(30) NOT NULL default '',
+   `buyer_id` int(11) unsigned NOT NULL default '0',
+   `buyer_name` varchar(30) NOT NULL default '',
+-  `price` int(11) unsigned NOT NULL default '0',
+-  `buynow` int(11) unsigned NOT NULL default '0',
+-  `bid_step` int(11) unsigned NOT NULL default '0',
++  `price` bigint(20) unsigned NOT NULL default '0',
++  `buynow` bigint(20) unsigned NOT NULL default '0',
++  `bid_step` bigint(20) unsigned NOT NULL default '0',
+   `end_time` int(11) unsigned NOT NULL default '0',
++  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+   `nameid` int(10) unsigned NOT NULL default '0',
+   `item_name` varchar(50) NOT NULL default '',
+   `type` smallint(6) NOT NULL default '0',
+   `refine` tinyint(3) unsigned NOT NULL default '0',
+   `attribute` tinyint(4) unsigned NOT NULL default '0',
++  `identify` tinyint(3) unsigned NOT NULL default '0',
++  `expire_time` int(11) unsigned NOT NULL default '0',
++  `bound` tinyint(3) unsigned NOT NULL default '0',
+   `card0` int(10) unsigned NOT NULL default '0',
+   `card1` int(10) unsigned NOT NULL default '0',
+   `card2` int(10) unsigned NOT NULL default '0',
+diff --git a/src/char/int_market.cpp b/src/char/int_market.cpp
+index 01ad2b4..c8dc76e 100644
+--- a/src/char/int_market.cpp
++++ b/src/char/int_market.cpp
+@@ -46,7 +46,7 @@ void market_save(std::shared_ptr<struct market_data> market) {
+	SqlStmt stmt{ *sql_handle };
+
+	StringBuf_Init(&buf);
+-	StringBuf_Printf(&buf, "UPDATE `custom_market` SET `buyer_id` = '%d', `buyer_name` = ?, `price` = '%u' WHERE `market_id` = '%u'",
++	StringBuf_Printf(&buf, "UPDATE `custom_market` SET `buyer_id` = '%d', `buyer_name` = ?, `price` = '%" PRIu64 "' WHERE `market_id` = '%u'",
+		market->buyer_id, market->price, market->market_id);
+
+	if (SQL_SUCCESS != stmt.PrepareStr(StringBuf_Value(&buf))
+@@ -61,7 +61,7 @@ void inter_market_fromsql(void) {
+	time_t now = time(nullptr);
+	t_tick tick = gettick();
+
+-	if (SQL_ERROR == Sql_Query(sql_handle, "SELECT `market_id`,`seller_id`,`seller_name`,`buyer_id`,`buyer_name`,`price`,`buynow`,`bid_step`,`end_time`,`nameid`,`item_name`,`type`,`refine`,`attribute`,`unique_id`,`enchantgrade`,`card0`,`card1`,`card2`,`card3`,`option_id0`,`option_val0`,`option_parm0`,`option_id1`,`option_val1`,`option_parm1`,`option_id2`,`option_val2`,`option_parm2`,`option_id3`,`option_val3`,`option_parm3`,`option_id4`,`option_val4`,`option_parm4` FROM `custom_market`")) {
++	if (SQL_ERROR == Sql_Query(sql_handle, "SELECT `market_id`,`seller_id`,`seller_account`,`seller_name`,`buyer_id`,`buyer_name`,`price`,`buynow`,`bid_step`,`end_time`,`nameid`,`item_name`,`type`,`refine`,`attribute`,`identify`,`expire_time`,`bound`,`unique_id`,`enchantgrade`,`card0`,`card1`,`card2`,`card3`,`option_id0`,`option_val0`,`option_parm0`,`option_id1`,`option_val1`,`option_parm1`,`option_id2`,`option_val2`,`option_parm2`,`option_id3`,`option_val3`,`option_parm3`,`option_id4`,`option_val4`,`option_parm4` FROM `custom_market`")) {
+		Sql_ShowDebug(sql_handle);
+		return;
+	}
+@@ -70,35 +70,37 @@ void inter_market_fromsql(void) {
+		auto market = std::make_shared<struct market_data>();
+		Sql_GetData(sql_handle, 0, &data, nullptr); market->market_id = atoi(data);
+		Sql_GetData(sql_handle, 1, &data, nullptr); market->seller_id = atoi(data);
+-		Sql_GetData(sql_handle, 2, &data, nullptr); safestrncpy(market->seller_name, data, NAME_LENGTH);
+-		Sql_GetData(sql_handle, 3, &data, nullptr); market->buyer_id = atoi(data);
+-		Sql_GetData(sql_handle, 4, &data, nullptr); safestrncpy(market->buyer_name, data, NAME_LENGTH);
+-		Sql_GetData(sql_handle, 5, &data, nullptr); market->price = (uint32)strtoul(data, nullptr, 10);
+-		Sql_GetData(sql_handle, 6, &data, nullptr); market->buynow = (uint32)strtoul(data, nullptr, 10);
+-		Sql_GetData(sql_handle, 7, &data, nullptr); market->bid_step = (uint32)strtoul(data, nullptr, 10);
+-		Sql_GetData(sql_handle, 8, &data, nullptr); market->timestamp = (time_t)atoll(data);
++		Sql_GetData(sql_handle, 2, &data, nullptr); market->seller_account = atoi(data);
++		Sql_GetData(sql_handle, 3, &data, nullptr); safestrncpy(market->seller_name, data, NAME_LENGTH);
++		Sql_GetData(sql_handle, 4, &data, nullptr); market->buyer_id = atoi(data);
++		Sql_GetData(sql_handle, 5, &data, nullptr); safestrncpy(market->buyer_name, data, NAME_LENGTH);
++		Sql_GetData(sql_handle, 6, &data, nullptr); market->price = (uint64)strtoull(data, nullptr, 10);
++		Sql_GetData(sql_handle, 7, &data, nullptr); market->buynow = (uint64)strtoull(data, nullptr, 10);
++		Sql_GetData(sql_handle, 8, &data, nullptr); market->bid_step = (uint64)strtoull(data, nullptr, 10);
++		Sql_GetData(sql_handle, 9, &data, nullptr); market->timestamp = (time_t)atoll(data);
+
+		struct item* item = &market->item;
+-		Sql_GetData(sql_handle, 9, &data, nullptr); item->nameid = (t_itemid)strtoul(data, nullptr, 10);
+-		Sql_GetData(sql_handle, 10, &data, nullptr); safestrncpy(market->item_name, data, ITEM_NAME_LENGTH);
+-		Sql_GetData(sql_handle, 11, &data, nullptr); market->type = atoi(data);
+-		Sql_GetData(sql_handle, 12, &data, nullptr); item->refine = atoi(data);
+-		Sql_GetData(sql_handle, 13, &data, nullptr); item->attribute = atoi(data);
+-		Sql_GetData(sql_handle, 14, &data, nullptr); item->unique_id = strtoull(data, nullptr, 10);
+-		Sql_GetData(sql_handle, 15, &data, nullptr); item->enchantgrade = atoi(data);
++		Sql_GetData(sql_handle, 10, &data, nullptr); item->nameid = (t_itemid)strtoul(data, nullptr, 10);
++		Sql_GetData(sql_handle, 11, &data, nullptr); safestrncpy(market->item_name, data, ITEM_NAME_LENGTH);
++		Sql_GetData(sql_handle, 12, &data, nullptr); market->type = atoi(data);
++		Sql_GetData(sql_handle, 13, &data, nullptr); item->refine = atoi(data);
++		Sql_GetData(sql_handle, 14, &data, nullptr); item->attribute = atoi(data);
++		Sql_GetData(sql_handle, 15, &data, nullptr); item->identify = atoi(data);
++		Sql_GetData(sql_handle, 16, &data, nullptr); item->expire_time = (uint32)strtoul(data, nullptr, 10);
++		Sql_GetData(sql_handle, 17, &data, nullptr); item->bound = atoi(data);
++		Sql_GetData(sql_handle, 18, &data, nullptr); item->unique_id = strtoull(data, nullptr, 10);
++		Sql_GetData(sql_handle, 19, &data, nullptr); item->enchantgrade = atoi(data);
+
+		for (int i = 0; i < 4; i++) {
+-			Sql_GetData(sql_handle, 16 + i, &data, nullptr);
++			Sql_GetData(sql_handle, 20 + i, &data, nullptr);
+			item->card[i] = (t_itemid)strtoul(data, nullptr, 10);
+		}
+
+		for (int i = 0; i < 5; i++) {
+-			Sql_GetData(sql_handle, 20 + i*3, &data, nullptr); item->option[i].id = atoi(data);
+-			Sql_GetData(sql_handle, 21 + i*3, &data, nullptr); item->option[i].value = atoi(data);
+-			Sql_GetData(sql_handle, 22 + i*3, &data, nullptr); item->option[i].param = atoi(data);
++			Sql_GetData(sql_handle, 24 + i*3, &data, nullptr); item->option[i].id = atoi(data);
++			Sql_GetData(sql_handle, 25 + i*3, &data, nullptr); item->option[i].value = atoi(data);
++			Sql_GetData(sql_handle, 26 + i*3, &data, nullptr); item->option[i].param = atoi(data);
+		}
+-
+-		item->identify = 1;
+		item->amount = 1;
+
+		t_tick end_tick;
+@@ -113,22 +115,31 @@ void inter_market_fromsql(void) {
+	Sql_FreeResult(sql_handle);
+ }
+
++void mapif_Market_purchase_ack(int32 fd, std::shared_ptr<struct market_data> market, uint8 result) {
++	int32 len = sizeof(struct market_data) + 5;
++	unsigned char* buf = (unsigned char*)aMalloc(len);
++
++	WBUFW(buf, 0) = 0x38B3;
++	WBUFW(buf, 2) = (uint16)len;
++	WBUFB(buf, 4) = result;
++	memcpy(WBUFP(buf, 5), market.get(), sizeof(struct market_data));
++
++	if (fd > 0)
++		chmapif_send(fd, buf, len);
++	else
++		chmapif_sendall(buf, len);
++
++	aFree(buf);
++}
++
+ TIMER_FUNC(market_end_timer) {
+	auto market = util::umap_find(market_db, (uint32)id);
+	if (market == nullptr) return 0;
+
+	if (market->buyer_id > 0) {
+-		// Calculate 6% tax
+-		uint32 tax = (uint32)((uint64)market->price * 6 / 100);
+-		uint32 seller_profit = market->price - tax;
+-
+-		// Deliver item to buyer
+-		mail_sendmail(0, "Market System", market->buyer_id, market->buyer_name, "Market: Purchase Won", "You won the auction!", 0, &market->item, 1);
+-		// Deliver Zeny to seller
+-		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Item Sold", "Your item has been sold.", seller_profit, nullptr, 0);
++		mapif_Market_purchase_ack(0, market, 0); // 0: Normal end/won
+	} else {
+-		// Return item to seller
+-		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: No Bidders", "Your auction ended with no bidders.", 0, &market->item, 1);
++		mapif_Market_purchase_ack(0, market, 1); // 1: No bidders
+	}
+
+	market->market_end_timer = INVALID_TIMER;
+@@ -146,10 +157,10 @@ void mapif_Market_register(int32 fd, struct market_data* market) {
+	Sql_QueryStr(sql_handle, "START TRANSACTION");
+
+	StringBuf_Init(&buf);
+-	StringBuf_Printf(&buf, "INSERT INTO `custom_market` (`seller_id`,`seller_name`,`price`,`buynow`,`bid_step`,`end_time`,`nameid`,`item_name`,`type`,`refine`,`attribute`,`unique_id`,`enchantgrade`,`card0`,`card1`,`card2`,`card3`"
++	StringBuf_Printf(&buf, "INSERT INTO `custom_market` (`seller_id`,`seller_account`,`seller_name`,`price`,`buynow`,`bid_step`,`end_time`,`nameid`,`item_name`,`type`,`refine`,`attribute`,`identify`,`expire_time`,`bound`,`unique_id`,`enchantgrade`,`card0`,`card1`,`card2`,`card3`"
+		",`option_id0`,`option_val0`,`option_parm0`,`option_id1`,`option_val1`,`option_parm1`,`option_id2`,`option_val2`,`option_parm2`,`option_id3`,`option_val3`,`option_parm3`,`option_id4`,`option_val4`,`option_parm4`"
+-		") VALUES ('%d',?,'%u','%u','%u','%lu','%u',?,'%d','%d','%d','%" PRIu64 "','%d'",
+-		market->seller_id, market->price, market->buynow, market->bid_step, (unsigned long)market->timestamp, market->item.nameid, market->type, market->item.refine, market->item.attribute, market->item.unique_id, market->item.enchantgrade);
++		") VALUES ('%d','%d',?,'%" PRIu64 "','%" PRIu64 "','%" PRIu64 "','%lu','%u',?,'%d','%d','%d','%d','%u','%d','%" PRIu64 "','%d'",
++		market->seller_id, market->seller_account, market->seller_name, market->price, market->buynow, market->bid_step, (unsigned long)market->timestamp, market->item.nameid, market->type, market->item.refine, market->item.attribute, market->item.identify, market->item.expire_time, market->item.bound, market->item.unique_id, market->item.enchantgrade);
+
+	for(j = 0; j < 4; j++) StringBuf_Printf(&buf, ",'%u'", market->item.card[j]);
+	for(j = 0; j < 5; j++) {
+@@ -166,8 +177,9 @@ void mapif_Market_register(int32 fd, struct market_data* market) {
+		SqlStmt_ShowDebug(stmt);
+		Sql_QueryStr(sql_handle, "ROLLBACK");
+
+-		// Return item to player via RODEX for safety
+-		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Registration Failed", "Failed to list item. It has been returned.", 0, &market->item, 1);
++		auto market_ptr = std::make_shared<struct market_data>();
++		memcpy(market_ptr.get(), market, sizeof(struct market_data));
++		mapif_Market_purchase_ack(fd, market_ptr, 5); // 5: Registration failure
+
+		WFIFOHEAD(fd, 11);
+		WFIFOW(fd, 0) = 0x38B0;
+@@ -200,9 +212,9 @@ void mapif_Market_register(int32 fd, struct market_data* market) {
+ void mapif_parse_Market_bid(int32 fd) {
+	uint32 char_id = RFIFOL(fd, 2);
+	uint32 market_id = RFIFOL(fd, 6);
+-	uint32 bid_amount = RFIFOL(fd, 10);
++	uint64 bid_amount = RFIFOQ(fd, 10);
+	char bidder_name[NAME_LENGTH];
+-	safestrncpy(bidder_name, (char*)RFIFOP(fd, 14), NAME_LENGTH);
++	safestrncpy(bidder_name, (char*)RFIFOP(fd, 18), NAME_LENGTH);
+
+	auto market = util::umap_find(market_db, market_id);
+
+@@ -220,19 +232,17 @@ void mapif_parse_Market_bid(int32 fd) {
+
+	// Refund previous bidder
+	if (market->buyer_id > 0) {
+-		mail_sendmail(0, "Market System", market->buyer_id, market->buyer_name, "Market: Outbid", "You have been outbid. Zeny returned.", market->price, nullptr, 0);
++		mapif_Market_purchase_ack(0, market, 4); // 4: Outbid
+	}
+
+	market->buyer_id = char_id;
+	safestrncpy(market->buyer_name, bidder_name, NAME_LENGTH);
+-	market->price = bid_amount;
++	market->price = (uint64)bid_amount;
+
+-	if (market->buynow > 0 && bid_amount >= market->buynow) {
++	if (market->buynow > 0 && market->price >= market->buynow) {
+		market->price = market->buynow;
+		// Instant win
+-		uint32 tax = (uint32)((uint64)market->price * 6 / 100);
+-		mail_sendmail(0, "Market System", market->buyer_id, market->buyer_name, "Market: Purchase Success", "Instant buy-now success!", 0, &market->item, 1);
+-		mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Item Sold", "Your item was bought instantly.", market->price - tax, nullptr, 0);
++		mapif_Market_purchase_ack(fd, market, 2); // 2: Instant win
+
+		Sql_QueryStr(sql_handle, "COMMIT");
+		market_delete(market);
+@@ -242,11 +252,11 @@ void mapif_parse_Market_bid(int32 fd) {
+	}
+
+	// Notify success - deduct zeny on map server
+-	WFIFOHEAD(fd, 10);
++	WFIFOHEAD(fd, 14);
+	WFIFOW(fd, 0) = 0x38B1;
+	WFIFOL(fd, 2) = char_id;
+-	WFIFOL(fd, 6) = bid_amount;
+-	WFIFOSET(fd, 10);
++	WFIFOQ(fd, 6) = bid_amount;
++	WFIFOSET(fd, 14);
+ }
+
+ void mapif_parse_Market_cancel(int32 fd) {
+@@ -264,8 +274,7 @@ void mapif_parse_Market_cancel(int32 fd) {
+		return;
+	}
+
+-	// Return item to seller via RODEX
+-	mail_sendmail(0, "Market System", market->seller_id, market->seller_name, "Market: Listing Cancelled", "Your listing has been cancelled. Item returned.", 0, &market->item, 1);
++	mapif_Market_purchase_ack(fd, market, 3); // 3: Cancelled
+
+	market_delete(market);
+
+diff --git a/src/char/inter.cpp b/src/char/inter.cpp
+index 51eb63c..9d36509 100644
+--- a/src/char/inter.cpp
++++ b/src/char/inter.cpp
+@@ -68,7 +68,7 @@ int32 inter_recv_packet_length[] = {
+	52,14,-1, 6,  0, 0, 0, 0,  0, 0,13,-1,  0, 0,  0, 0,	// 3080-  Pet System, Storage
+	-1,10,-1, 6,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0,	// 3090-  Homunculus packets [albator]
+	 2,-1, 6, 6,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0,	// 30A0-  Clan packets
+-	 0, 0, 0, 0, -1, 38, 10, 0,  0, 0, 0, 0,  0, 0,  0, 0,	// 30B0-  Market packets (0x30B4-0x30B6)
++	 0, 0, 0, 0, -1, 42, 10, 0,  0, 0, 0, 0,  0, 0,  0, 0,	// 30B0-  Market packets (0x30B4-0x30B6)
+ };
+
+ #ifndef WHISPER_MESSAGE_SIZE
+diff --git a/src/common/mmo.hpp b/src/common/mmo.hpp
+index cba1bb7..1166fcf 100644
+--- a/src/common/mmo.hpp
++++ b/src/common/mmo.hpp
+@@ -698,6 +698,7 @@ struct auction_data {
+ struct market_data {
+	uint32 market_id;
+	int32 seller_id;
++	int32 seller_account;
+	char seller_name[NAME_LENGTH];
+	int32 buyer_id;
+	char buyer_name[NAME_LENGTH];
+@@ -706,7 +707,7 @@ struct market_data {
+	char item_name[ITEM_NAME_LENGTH];
+	int16 type;
+
+-	uint32 price, buynow, bid_step;
++	uint64 price, buynow, bid_step;
+	time_t timestamp;
+	int32 market_end_timer;
+ };
+diff --git a/src/map/clif.cpp b/src/map/clif.cpp
+index 32b7faa..9e5e9b8 100644
+--- a/src/map/clif.cpp
++++ b/src/map/clif.cpp
+@@ -19619,14 +19619,14 @@ static void clif_parse_SearchStoreInfoListItemClick( int32 fd, map_session_data*
+
+	if (p->storeId & CUSTOM_MARKET_STORE_ID_OFFSET) {
+		uint32 market_id = p->storeId & ~CUSTOM_MARKET_STORE_ID_OFFSET;
+-		uint32 price = 0;
++		uint64 price = 0;
+		uint32 seller_id = 0;
+
+		// Security: Get the price and seller_id to double check
+		if (SQL_ERROR != Sql_Query(mmysql_handle, "SELECT price, seller_id FROM custom_market WHERE market_id = %u", market_id)) {
+			if (SQL_SUCCESS == Sql_NextRow(mmysql_handle)) {
+				char* data;
+-				Sql_GetData(mmysql_handle, 0, &data, nullptr); price = (uint32)strtoul(data, nullptr, 10);
++				Sql_GetData(mmysql_handle, 0, &data, nullptr); price = (uint64)strtoull(data, nullptr, 10);
+				Sql_GetData(mmysql_handle, 1, &data, nullptr); seller_id = (uint32)atoi(data);
+			}
+			Sql_FreeResult(mmysql_handle);
+@@ -19642,7 +19642,7 @@ static void clif_parse_SearchStoreInfoListItemClick( int32 fd, map_session_data*
+			return;
+		}
+
+-		if ((uint32)sd->status.zeny < price) {
++		if ((uint64)sd->status.zeny < price) {
+			clif_displaymessage(fd, "Market: You do not have enough Zeny.");
+			return;
+		}
+diff --git a/src/map/intif.cpp b/src/map/intif.cpp
+index 8c70e6b..7a0b97b 100644
+--- a/src/map/intif.cpp
++++ b/src/map/intif.cpp
+@@ -46,7 +46,7 @@ static const int32 packet_len_table[] = {
+	12,-1, 7, 3,  0, 0, 0, 0,  0, 0,-1, 9, -1, 0,  0, 0, //0x3880  Pet System,  Storages
+	-1,-1, 7, 3,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x3890  Homunculus [albator]
+	-1,-1, 8, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38A0  Clans
+-	11,10, 7, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38B0  Custom Market
++	11,14, 7,-1,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38B0  Custom Market
+ };
+
+ extern int32 char_fd; // inter server Fd used for char_fd
+@@ -2062,16 +2062,16 @@ int32 intif_Market_register(struct market_data *market) {
+	return 1;
+ }
+
+-int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint32 bid, const char* name) {
++int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint64 bid, const char* name) {
+	if(CheckForCharServer()) return 0;
+
+-	WFIFOHEAD(inter_fd, 14 + NAME_LENGTH);
++	WFIFOHEAD(inter_fd, 18 + NAME_LENGTH);
+	WFIFOW(inter_fd, 0) = 0x30B5;
+	WFIFOL(inter_fd, 2) = char_id;
+	WFIFOL(inter_fd, 6) = market_id;
+-	WFIFOL(inter_fd, 10) = bid;
+-	safestrncpy(WFIFOCP(inter_fd, 14), name, NAME_LENGTH);
+-	WFIFOSET(inter_fd, 14 + NAME_LENGTH);
++	WFIFOQ(inter_fd, 10) = bid;
++	safestrncpy(WFIFOCP(inter_fd, 18), name, NAME_LENGTH);
++	WFIFOSET(inter_fd, 18 + NAME_LENGTH);
+	return 1;
+ }
+
+@@ -2994,7 +2994,7 @@ void intif_parse_Market_register_result(int32 fd) {
+
+ void intif_parse_Market_bid_result(int32 fd) {
+	uint32 char_id = RFIFOL(fd, 2);
+-	uint32 amount = RFIFOL(fd, 6);
++	uint64 amount = RFIFOQ(fd, 6);
+
+	map_session_data* sd = map_charid2sd(char_id);
+	if (sd == nullptr) return;
+@@ -3004,12 +3004,17 @@ void intif_parse_Market_bid_result(int32 fd) {
+		return;
+	}
+
+-	if ((uint32)sd->status.zeny < amount) {
+-		ShowError("Market: Player %s (%d) has insufficient zeny (%d < %u) for accepted bid!\n", sd->status.name, char_id, sd->status.zeny, amount);
++	if (amount > MAX_ZENY) {
++		ShowError("Market: Invalid bid amount %" PRIu64 " for player %s (%d)!\n", amount, sd->status.name, char_id);
+		return;
+	}
+
+-	pc_payzeny(sd, amount, LOG_TYPE_AUCTION);
++	if ((uint64)sd->status.zeny < amount) {
++		ShowError("Market: Player %s (%d) has insufficient zeny (%d < %" PRIu64 ") for accepted bid!\n", sd->status.name, char_id, sd->status.zeny, amount);
++		return;
++	}
++
++	pc_payzeny(sd, (int32)amount, LOG_TYPE_AUCTION);
+	clif_displaymessage(sd->fd, "Market: Bid placed successfully.");
+ }
+
+@@ -3021,12 +3026,158 @@ void intif_parse_Market_cancel_result(int32 fd) {
+	if (sd == nullptr) return;
+
+	if (success) {
+-		clif_displaymessage(sd->fd, "Market: Listing cancelled. Item returned via RODEX.");
++		clif_displaymessage(sd->fd, "Market: Listing cancel request sent.");
+	} else {
+		clif_displaymessage(sd->fd, "Market: Failed to cancel listing. It may have bids or already ended.");
+	}
+ }
+
++void intif_parse_Market_purchase_ack(int32 fd) {
++	uint8 result = RFIFOB(fd, 4);
++	struct market_data* market = (struct market_data*)RFIFOP(fd, 5);
++	uint64 tax = (uint64)(market->price * 6 / 100);
++	uint64 seller_profit = market->price - tax;
++	bool is_responsible = false;
++
++	if (seller_profit > MAX_ZENY)
++		seller_profit = MAX_ZENY;
++
++	// Optimization: To avoid duplicate RODEX deliveries when multiple map servers are active,
++	// only the map server where the target player is online (or the first one in the list if offline) handles the mail.
++	// For cases involving two players (buyer and seller), the one responsible for the "main" player or result handles it.
++
++	uint32 target_char_id = 0;
++	switch (result) {
++		case 0: // Normal end/won
++		case 2: // Instant win
++			target_char_id = market->buyer_id; // Try buyer's map first
++			break;
++		case 1: // No bidders
++		case 3: // Cancelled
++		case 5: // Reg failure
++			target_char_id = market->seller_id;
++			break;
++		case 4: // Outbid
++			target_char_id = market->buyer_id;
++			break;
++	}
++
++	if (map_charid2sd(target_char_id) != nullptr)
++		is_responsible = true;
++	else if (other_mapserver_count == 0) // Only map server
++		is_responsible = true;
++	// If player is offline and multiple map servers, we'd need a way to elect one.
++	// For now, if chmapif_send(fd, ...) is used with a specific FD, only that map handles it.
++	// Packet 0x38B3 is only sent via chmapif_sendall if fd was 0 on char-server side.
++	// In my char-server logic, I use chmapif_send(fd, ...) where fd > 0 (successful bid/cancel from player).
++	// Timers use 0.
++
++	if (fd > 0) // Direct response to this map server
++		is_responsible = true;
++
++	if (!is_responsible)
++		return;
++
++	switch (result) {
++		case 0: // Normal end/won
++		case 2: // Instant win
++			{
++				struct mail_message msg;
++
++				// Deliver item to buyer
++				memset(&msg, 0, sizeof(struct mail_message));
++				safestrncpy(msg.send_name, "Market System", NAME_LENGTH);
++				msg.dest_id = market->buyer_id;
++				safestrncpy(msg.dest_name, market->buyer_name, NAME_LENGTH);
++				safestrncpy(msg.title, "Market: Purchase Won", MAIL_TITLE_LENGTH);
++				safestrncpy(msg.body, "You won the auction!", MAIL_BODY_LENGTH);
++				memcpy(&msg.item[0], &market->item, sizeof(struct item));
++				msg.timestamp = time(nullptr);
++				msg.type = MAIL_INBOX_NORMAL;
++				intif_Mail_send(0, &msg);
++
++				// Deliver Zeny to seller
++				memset(&msg, 0, sizeof(struct mail_message));
++				safestrncpy(msg.send_name, "Market System", NAME_LENGTH);
++				msg.dest_id = market->seller_id;
++				safestrncpy(msg.dest_name, market->seller_name, NAME_LENGTH);
++				safestrncpy(msg.title, "Market: Item Sold", MAIL_TITLE_LENGTH);
++				safestrncpy(msg.body, "Your item has been sold.", MAIL_BODY_LENGTH);
++				msg.zeny = (uint32)seller_profit;
++				msg.timestamp = time(nullptr);
++				msg.type = MAIL_INBOX_NORMAL;
++				intif_Mail_send(0, &msg);
++			}
++
++			if (result == 2) {
++				map_session_data* sd = map_charid2sd(market->buyer_id);
++				if (sd) clif_displaymessage(sd->fd, "Market: Instant buy-now success!");
++			}
++			break;
++
++		case 1: // No bidders
++		case 3: // Cancelled
++			{
++				struct mail_message msg;
++
++				// Return item to seller
++				memset(&msg, 0, sizeof(struct mail_message));
++				safestrncpy(msg.send_name, "Market System", NAME_LENGTH);
++				msg.dest_id = market->seller_id;
++				safestrncpy(msg.dest_name, market->seller_name, NAME_LENGTH);
++				safestrncpy(msg.title, (result == 1 ? "Market: No Bidders" : "Market: Listing Cancelled"), MAIL_TITLE_LENGTH);
++				safestrncpy(msg.body, (result == 1 ? "Your auction ended with no bidders." : "Your listing has been cancelled."), MAIL_BODY_LENGTH);
++				memcpy(&msg.item[0], &market->item, sizeof(struct item));
++				msg.timestamp = time(nullptr);
++				msg.type = MAIL_INBOX_NORMAL;
++				intif_Mail_send(0, &msg);
++			}
++			break;
++
++		case 4: // Outbid
++			{
++				struct mail_message msg;
++
++				// Refund previous bidder
++				memset(&msg, 0, sizeof(struct mail_message));
++				safestrncpy(msg.send_name, "Market System", NAME_LENGTH);
++				msg.dest_id = market->buyer_id;
++				safestrncpy(msg.dest_name, market->buyer_name, NAME_LENGTH);
++				safestrncpy(msg.title, "Market: Outbid", MAIL_TITLE_LENGTH);
++				safestrncpy(msg.body, "You have been outbid. Zeny returned.", MAIL_BODY_LENGTH);
++				msg.zeny = (uint32)market->price;
++				msg.timestamp = time(nullptr);
++				msg.type = MAIL_INBOX_NORMAL;
++				intif_Mail_send(0, &msg);
++
++				map_session_data* sd = map_charid2sd(market->buyer_id);
++				if (sd) clif_displaymessage(sd->fd, "Market: You have been outbid on an item.");
++			}
++			break;
++
++		case 5: // Registration failure
++			{
++				struct mail_message msg;
++
++				// Return item to seller
++				memset(&msg, 0, sizeof(struct mail_message));
++				safestrncpy(msg.send_name, "Market System", NAME_LENGTH);
++				msg.dest_id = market->seller_id;
++				safestrncpy(msg.dest_name, market->seller_name, NAME_LENGTH);
++				safestrncpy(msg.title, "Market: Registration Failed", MAIL_TITLE_LENGTH);
++				safestrncpy(msg.body, "Failed to list item. It has been returned.", MAIL_BODY_LENGTH);
++				memcpy(&msg.item[0], &market->item, sizeof(struct item));
++				msg.timestamp = time(nullptr);
++				msg.type = MAIL_INBOX_NORMAL;
++				intif_Mail_send(0, &msg);
++
++				map_session_data* sd = map_charid2sd(market->seller_id);
++				if (sd) clif_displaymessage(sd->fd, "Market: Registration failed. Your item was returned via RODEX.");
++			}
++			break;
++	}
++}
++
+ /*==========================================
+  * Mercenary's System
+  *------------------------------------------*/
+@@ -3974,6 +4125,7 @@ int32 intif_parse(int32 fd)
+	case 0x38B0:	intif_parse_Market_register_result(fd); break;
+	case 0x38B1:	intif_parse_Market_bid_result(fd); break;
+	case 0x38B2:	intif_parse_Market_cancel_result(fd); break;
++	case 0x38B3:	intif_parse_Market_purchase_ack(fd); break;
+
+	default:
+		ShowError("intif_parse : unknown packet %d %x\n",fd,RFIFOW(fd,0));
+diff --git a/src/map/intif.hpp b/src/map/intif.hpp
+index 729343d..92077b1 100644
+--- a/src/map/intif.hpp
++++ b/src/map/intif.hpp
+@@ -107,7 +107,7 @@ bool intif_mail_checkreceiver(map_session_data* sd, char* name);
+ int32 intif_Auction_requestlist(uint32 char_id, int16 type, int32 price, const char* searchtext, int16 page);
+ int32 intif_Auction_register(struct auction_data *auction);
+ int32 intif_Market_register(struct market_data *market);
+-int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint32 bid, const char* name);
++int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint64 bid, const char* name);
+ int32 intif_Market_cancel(uint32 char_id, uint32 market_id);
+ int32 intif_Auction_cancel(uint32 char_id, uint32 auction_id);
+ int32 intif_Auction_close(uint32 char_id, uint32 auction_id);
+diff --git a/src/map/script.cpp b/src/map/script.cpp
+index 37fd7fc..db7cd46 100644
+--- a/src/map/script.cpp
++++ b/src/map/script.cpp
+@@ -8105,6 +8105,13 @@ BUILDIN_FUNC(market_list_item) {
+		return SCRIPT_CMD_SUCCESS;
+	}
+
++	// Safety: Basic player state checks
++	if (pc_isdead(sd) || sd->state.vending || sd->state.buyingstore || pc_istrading(sd) || sd->npc_id || sd->state.storage_flag || sd->state.prevend) {
++		ShowWarning("market_list_item: Player %s (AID:%d) attempted to list item while in invalid state.\n", sd->status.name, sd->status.account_id);
++		script_pushint(st, 0);
++		return SCRIPT_CMD_SUCCESS;
++	}
++
+	// Cannot list equipped items
+	if (sd->inventory.u.items_inventory[index].equip != 0) {
+		script_pushint(st, 0);
+@@ -8118,24 +8125,19 @@ BUILDIN_FUNC(market_list_item) {
+	}
+
+	// Cannot list untradeable items
+-	if (!itemdb_cantrade(&sd->inventory.u.items_inventory[index], pc_get_group_level(sd), pc_get_group_level(sd))) {
+-		script_pushint(st, 0);
+-		return SCRIPT_CMD_SUCCESS;
+-	}
+-
+-	// Security: Anti-Dupe checks
+-	if (pc_istrading(sd) || sd->state.vending || sd->state.buyingstore) {
+-		ShowWarning("market_list_item: Player %s (AID:%d) attempted to list item while in trade/vending/buyingstore.\n", sd->status.name, sd->status.account_id);
++	if (!itemdb_available(sd->inventory.u.items_inventory[index].nameid) ||
++		!itemdb_cantrade(&sd->inventory.u.items_inventory[index], pc_get_group_level(sd), pc_get_group_level(sd))) {
+		script_pushint(st, 0);
+		return SCRIPT_CMD_SUCCESS;
+	}
+
+	memset(&market, 0, sizeof(struct market_data));
+	market.seller_id = sd->status.char_id;
++	market.seller_account = sd->status.account_id;
+	safestrncpy(market.seller_name, sd->status.name, NAME_LENGTH);
+-	market.price = price;
+-	market.buynow = buynow;
+-	market.bid_step = bid_step;
++	market.price = (uint64)price;
++	market.buynow = (uint64)buynow;
++	market.bid_step = (uint64)bid_step;
+	market.timestamp = time(nullptr) + (hours * 3600);
+
+	memcpy(&market.item, &sd->inventory.u.items_inventory[index], sizeof(struct item));
+diff --git a/src/map/searchstore.cpp b/src/map/searchstore.cpp
+index aa4a7e0..3b99ec5 100644
+--- a/src/map/searchstore.cpp
++++ b/src/map/searchstore.cpp
+@@ -10,6 +10,7 @@
+
+ #include "battle.hpp"  // battle_config.*
+ #include "clif.hpp"  // clif_open_search_store_info, clif_search_store_info_*
++#include "intif.hpp"
+ #include "pc.hpp"  // map_session_data
+
+ /// Type for shop search function
+@@ -211,7 +212,7 @@ void searchstore_query(map_session_data& sd, e_searchstore_searchtype type, uint
+
+		if (!item_ids_str.empty()) {
+			if (SQL_ERROR != Sql_Query(mmysql_handle,
+-				"SELECT market_id, seller_id, seller_name, nameid, price, refine, enchantgrade, card0, card1, card2, card3, amount "
++				"SELECT market_id, seller_id, seller_account, seller_name, nameid, price, refine, enchantgrade, card0, card1, card2, card3, amount "
+				"FROM custom_market "
+				"WHERE nameid IN (%s) "
+				"AND end_time > UNIX_TIMESTAMP() "
+@@ -222,12 +223,14 @@ void searchstore_query(map_session_data& sd, e_searchstore_searchtype type, uint
+				while (SQL_SUCCESS == Sql_NextRow(mmysql_handle)) {
+					char* data;
+					t_itemid nameid;
+-					Sql_GetData(mmysql_handle, 3, &data, nullptr); nameid = (t_itemid)strtoul(data, nullptr, 10);
++					uint32 seller_id;
++					Sql_GetData(mmysql_handle, 1, &data, nullptr); seller_id = (uint32)atoi(data);
++					Sql_GetData(mmysql_handle, 4, &data, nullptr); nameid = (t_itemid)strtoul(data, nullptr, 10);
+
+					// Card filter logic
+					t_itemid cards[MAX_SLOTS];
+					for (int j = 0; j < MAX_SLOTS; j++) {
+-						Sql_GetData(mmysql_handle, 7 + j, &data, nullptr); cards[j] = (t_itemid)strtoul(data, nullptr, 10);
++						Sql_GetData(mmysql_handle, 8 + j, &data, nullptr); cards[j] = (t_itemid)strtoul(data, nullptr, 10);
+					}
+
+					if (card_count > 0) {
+@@ -247,21 +250,21 @@ void searchstore_query(map_session_data& sd, e_searchstore_searchtype type, uint
+
+					auto ssitem = std::make_shared<s_search_store_info_item>();
+					Sql_GetData(mmysql_handle, 0, &data, nullptr); ssitem->store_id = (int32)(strtoul(data, nullptr, 10) | CUSTOM_MARKET_STORE_ID_OFFSET);
+-					Sql_GetData(mmysql_handle, 1, &data, nullptr); ssitem->account_id = (uint32)atoi(data);
+-					Sql_GetData(mmysql_handle, 2, &data, nullptr); safestrncpy(ssitem->store_name, data, sizeof(ssitem->store_name));
++					Sql_GetData(mmysql_handle, 2, &data, nullptr); ssitem->account_id = (uint32)atoi(data); // seller_account
++					Sql_GetData(mmysql_handle, 3, &data, nullptr); safestrncpy(ssitem->store_name, data, sizeof(ssitem->store_name));
+					if (strstr(ssitem->store_name, " [Market]") == nullptr) {
+						size_t len = strlen(ssitem->store_name);
+						if (len + 10 < sizeof(ssitem->store_name))
+							safestrncpy(ssitem->store_name + len, " [Market]", sizeof(ssitem->store_name) - len);
+					}
+					ssitem->nameid = nameid;
+-					Sql_GetData(mmysql_handle, 4, &data, nullptr); ssitem->price = (uint32)strtoul(data, nullptr, 10);
+-					Sql_GetData(mmysql_handle, 5, &data, nullptr); ssitem->refine = (unsigned char)atoi(data);
+-					Sql_GetData(mmysql_handle, 6, &data, nullptr); ssitem->enchantgrade = (uint8)atoi(data);
++					Sql_GetData(mmysql_handle, 5, &data, nullptr); ssitem->price = (uint32)strtoul(data, nullptr, 10);
++					Sql_GetData(mmysql_handle, 6, &data, nullptr); ssitem->refine = (unsigned char)atoi(data);
++					Sql_GetData(mmysql_handle, 7, &data, nullptr); ssitem->enchantgrade = (uint8)atoi(data);
+					for (int j = 0; j < MAX_SLOTS; j++) ssitem->card[j] = cards[j];
+-					Sql_GetData(mmysql_handle, 11, &data, nullptr); ssitem->amount = (uint16)atoi(data);
++					Sql_GetData(mmysql_handle, 12, &data, nullptr); ssitem->amount = (uint16)atoi(data);
+
+-					if (ssitem->account_id != sd.status.char_id) // Skip own listings (account_id field here contains char_id)
++					if (seller_id != sd.status.char_id) // Skip own listings
+						sd.searchstore.items.push_back(ssitem);
+
+					if (sd.searchstore.items.size() >= (uint32)battle_config.searchstore_maxresults)
+@@ -370,6 +373,7 @@ void searchstore_click(map_session_data& sd, uint32 account_id, int32 store_id,
+		return;
+	}
+
++
+	if( ( pl_sd = map_id2sd(account_id) ) == nullptr ) { // no longer online
+		clif_search_store_info_failed(sd, SSI_FAILED_SSILIST_CLICK_TO_OPEN_STORE);
+		return;

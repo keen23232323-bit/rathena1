@@ -3037,9 +3037,46 @@ void intif_parse_Market_purchase_ack(int32 fd) {
 	struct market_data* market = (struct market_data*)RFIFOP(fd, 5);
 	uint64 tax = (uint64)(market->price * 6 / 100);
 	uint64 seller_profit = market->price - tax;
+	bool is_responsible = false;
 
 	if (seller_profit > MAX_ZENY)
 		seller_profit = MAX_ZENY;
+
+	// Optimization: To avoid duplicate RODEX deliveries when multiple map servers are active,
+	// only the map server where the target player is online (or the first one in the list if offline) handles the mail.
+	// For cases involving two players (buyer and seller), the one responsible for the "main" player or result handles it.
+
+	uint32 target_char_id = 0;
+	switch (result) {
+		case 0: // Normal end/won
+		case 2: // Instant win
+			target_char_id = market->buyer_id; // Try buyer's map first
+			break;
+		case 1: // No bidders
+		case 3: // Cancelled
+		case 5: // Reg failure
+			target_char_id = market->seller_id;
+			break;
+		case 4: // Outbid
+			target_char_id = market->buyer_id;
+			break;
+	}
+
+	if (map_charid2sd(target_char_id) != nullptr)
+		is_responsible = true;
+	else if (other_mapserver_count == 0) // Only map server
+		is_responsible = true;
+	// If player is offline and multiple map servers, we'd need a way to elect one.
+	// For now, if chmapif_send(fd, ...) is used with a specific FD, only that map handles it.
+	// Packet 0x38B3 is only sent via chmapif_sendall if fd was 0 on char-server side.
+	// In my char-server logic, I use chmapif_send(fd, ...) where fd > 0 (successful bid/cancel from player).
+	// Timers use 0.
+
+	if (fd > 0) // Direct response to this map server
+		is_responsible = true;
+
+	if (!is_responsible)
+		return;
 
 	switch (result) {
 		case 0: // Normal end/won
