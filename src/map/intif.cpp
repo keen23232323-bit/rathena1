@@ -3008,12 +3008,17 @@ void intif_parse_Market_bid_result(int32 fd) {
 		return;
 	}
 
-	if ((uint32)sd->status.zeny < amount) {
-		ShowError("Market: Player %s (%d) has insufficient zeny (%d < %u) for accepted bid!\n", sd->status.name, char_id, sd->status.zeny, amount);
+	if (amount > MAX_ZENY) {
+		ShowError("Market: Invalid bid amount %" PRIu64 " for player %s (%d)!\n", amount, sd->status.name, char_id);
 		return;
 	}
 
-	pc_payzeny(sd, amount, LOG_TYPE_AUCTION);
+	if ((uint64)sd->status.zeny < amount) {
+		ShowError("Market: Player %s (%d) has insufficient zeny (%d < %" PRIu64 ") for accepted bid!\n", sd->status.name, char_id, sd->status.zeny, amount);
+		return;
+	}
+
+	pc_payzeny(sd, (int32)amount, LOG_TYPE_AUCTION);
 	clif_displaymessage(sd->fd, "Market: Bid placed successfully.");
 }
 

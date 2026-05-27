@@ -373,18 +373,6 @@ void searchstore_click(map_session_data& sd, uint32 account_id, int32 store_id, 
 		return;
 	}
 
-	if (store_id & CUSTOM_MARKET_STORE_ID_OFFSET) {
-		uint32 market_id = store_id & ~CUSTOM_MARKET_STORE_ID_OFFSET;
-		uint32 price = sd.searchstore.items[i]->price;
-
-		if ((uint32)sd.status.zeny < price) {
-			clif_displaymessage(sd.fd, "Market: You do not have enough Zeny.");
-			return;
-		}
-
-		intif_Market_bid(sd.status.char_id, market_id, price, sd.status.name);
-		return;
-	}
 
 	if( ( pl_sd = map_id2sd(account_id) ) == nullptr ) { // no longer online
 		clif_search_store_info_failed(sd, SSI_FAILED_SSILIST_CLICK_TO_OPEN_STORE);

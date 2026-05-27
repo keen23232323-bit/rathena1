@@ -127,10 +127,10 @@
 		// =================== MY LISTINGS ===================
 		case 2:
 			while(1) {
-				deletearray .@my_id[0];
-				deletearray .@my_name$[0];
-				deletearray .@my_price[0];
-				deletearray .@my_buyer[0];
+				deletearray .@my_id;
+				deletearray .@my_name$;
+				deletearray .@my_price;
+				deletearray .@my_buyer;
 
 				query_sql("SELECT market_id, item_name, price, buyer_id FROM custom_market WHERE seller_id = " + .@char_id + " AND end_time > UNIX_TIMESTAMP() ORDER BY market_id DESC",
 					.@my_id, .@my_name$, .@my_price, .@my_buyer);
