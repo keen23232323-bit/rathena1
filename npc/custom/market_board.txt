@@ -1,5 +1,5 @@
 //===== rAthena Script =======================================
-//= Custom Market Board v3.0
+//= Custom Market Board v3.1
 //= Production-ready auction system
 //===== Features: ============================================
 //= - RODEX delivery, 6% tax, Anti-Dupe (C++ side)
@@ -12,7 +12,7 @@
 	mes "Search and Buy are now available via the ^0000FFMarket Search^000000 window.";
 	next;
 
-	.@char_id = strcharinfo(3);
+	.@char_id = getcharid(0);
 
 	while(1) {
 		mes "[Market Board]";
@@ -24,7 +24,7 @@
 		// =================== SELL ITEM ===================
 		case 1:
 			getinventorylist;
-			if (@inventorylist_count == 0) {
+			if (getarraysize(@inventorylist_id) == 0) {
 				mes "[Market Board]";
 				mes "Your inventory is empty.";
 				next;
@@ -36,7 +36,7 @@
 			next;
 
 			.@inv_list$ = "";
-			for (.@i = 0; .@i < @inventorylist_count; .@i++) {
+			for (.@i = 0; .@i < getarraysize(@inventorylist_id); .@i++) {
 				.@iname$ = getitemname(@inventorylist_id[.@i]);
 				if (@inventorylist_refine[.@i] > 0)
 					.@iname$ = "+" + @inventorylist_refine[.@i] + " " + .@iname$;
@@ -45,7 +45,7 @@
 			.@inv_list$ = .@inv_list$ + "Cancel";
 			.@inv_s = select(.@inv_list$);
 
-			if (.@inv_s > @inventorylist_count) break; // Cancel
+			if (.@inv_s > getarraysize(@inventorylist_id)) break; // Cancel
 			.@inv_idx = .@inv_s - 1;
 			.@item_index = @inventorylist_index[.@inv_idx];
 
@@ -126,51 +126,55 @@
 
 		// =================== MY LISTINGS ===================
 		case 2:
-			deletearray .@my_id;
-			deletearray .@my_name$;
-			deletearray .@my_price;
-			deletearray .@my_buyer;
+			while(1) {
+				deletearray .@my_id;
+				deletearray .@my_name$;
+				deletearray .@my_price;
+				deletearray .@my_buyer;
 
-			query_sql("SELECT market_id, item_name, price, buyer_id FROM custom_market WHERE seller_id = " + .@char_id + " AND end_time > UNIX_TIMESTAMP() ORDER BY market_id DESC",
-				.@my_id, .@my_name$, .@my_price, .@my_buyer);
-			.@my_count = getarraysize(.@my_id);
+				query_sql("SELECT market_id, item_name, price, buyer_id FROM custom_market WHERE seller_id = " + .@char_id + " AND end_time > UNIX_TIMESTAMP() ORDER BY market_id DESC",
+					.@my_id, .@my_name$, .@my_price, .@my_buyer);
+				.@my_count = getarraysize(.@my_id);
 
-			mes "[Market Board]";
-			if (!.@my_count) {
-				mes "You have no active listings.";
-				next;
-				break;
-			}
+				mes "[Market Board]";
+				if (!.@my_count) {
+					mes "You have no active listings.";
+					next;
+					break; // Go back to main while(1) loop
+				}
 
-			.@my_list$ = "";
-			for (.@i = 0; .@i < .@my_count; .@i++) {
-				.@status$ = .@my_buyer[.@i] > 0 ? "[Has Bid]" : "[No Bids]";
-				.@my_list$ = .@my_list$ + .@my_name$[.@i] + " " + .@status$ + " - " + .@my_price[.@i] + "z:";
-			}
-			.@my_list$ = .@my_list$ + "Back";
-			.@my_s = select(.@my_list$);
+				.@my_list$ = "";
+				for (.@i = 0; .@i < .@my_count; .@i++) {
+					.@status$ = .@my_buyer[.@i] > 0 ? "[Has Bid]" : "[No Bids]";
+					.@my_list$ = .@my_list$ + .@my_name$[.@i] + " " + .@status$ + " - " + .@my_price[.@i] + "z:";
+				}
+				.@my_list$ = .@my_list$ + "Back";
+				.@my_s = select(.@my_list$);
 
-			if (.@my_s > .@my_count) break;
-			.@my_idx = .@my_s - 1;
+				if (.@my_s > .@my_count) break; // Back to main menu
+				.@my_idx = .@my_s - 1;
 
-			mes "[Market Board]";
-			mes "Listing: ^0000FF" + .@my_name$[.@my_idx] + "^000000";
-			mes "Current Bid: ^FF0000" + .@my_price[.@my_idx] + " z^000000";
+				mes "[Market Board]";
+				mes "Listing: ^0000FF" + .@my_name$[.@my_idx] + "^000000";
+				mes "Current Price: ^FF0000" + .@my_price[.@my_idx] + " z^000000";
 
-			if (.@my_buyer[.@my_idx] == 0) {
-				mes "No bids yet — you can cancel.";
-				next;
-				if (select("Cancel Listing:Back") == 1) {
-					if (market_cancel(.@my_id[.@my_idx])) {
-						mes "Listing cancel request sent.";
-					} else {
-						mes "Failed to send cancel request.";
+				if (.@my_buyer[.@my_idx] == 0) {
+					mes "No bids yet — you can cancel.";
+					next;
+					if (select("Cancel Listing:Back") == 1) {
+						if (market_cancel(.@my_id[.@my_idx])) {
+							mes "[Market Board]";
+							mes "Listing cancelled. Item returned via RODEX.";
+						} else {
+							mes "[Market Board]";
+							mes "Failed to cancel listing.";
+						}
+						next;
 					}
+				} else {
+					mes "Bidding is active — cannot cancel.";
 					next;
 				}
-			} else {
-				mes "Bidding is active — cannot cancel.";
-				next;
 			}
 			break;
 		}

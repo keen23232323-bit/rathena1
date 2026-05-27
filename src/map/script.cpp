@@ -8105,6 +8105,13 @@ BUILDIN_FUNC(market_list_item) {
 		return SCRIPT_CMD_SUCCESS;
 	}
 
+	// Safety: Basic player state checks
+	if (pc_isdead(sd) || sd->state.vending || sd->state.buyingstore || pc_istrading(sd) || sd->npc_id || sd->state.storage_flag || sd->state.prevend) {
+		ShowWarning("market_list_item: Player %s (AID:%d) attempted to list item while in invalid state.\n", sd->status.name, sd->status.account_id);
+		script_pushint(st, 0);
+		return SCRIPT_CMD_SUCCESS;
+	}
+
 	// Cannot list equipped items
 	if (sd->inventory.u.items_inventory[index].equip != 0) {
 		script_pushint(st, 0);
@@ -8118,24 +8125,19 @@ BUILDIN_FUNC(market_list_item) {
 	}
 
 	// Cannot list untradeable items
-	if (!itemdb_cantrade(&sd->inventory.u.items_inventory[index], pc_get_group_level(sd), pc_get_group_level(sd))) {
-		script_pushint(st, 0);
-		return SCRIPT_CMD_SUCCESS;
-	}
-
-	// Security: Anti-Dupe checks
-	if (pc_istrading(sd) || sd->state.vending || sd->state.buyingstore) {
-		ShowWarning("market_list_item: Player %s (AID:%d) attempted to list item while in trade/vending/buyingstore.\n", sd->status.name, sd->status.account_id);
+	if (!itemdb_available(sd->inventory.u.items_inventory[index].nameid) ||
+		!itemdb_cantrade(&sd->inventory.u.items_inventory[index], pc_get_group_level(sd), pc_get_group_level(sd))) {
 		script_pushint(st, 0);
 		return SCRIPT_CMD_SUCCESS;
 	}
 
 	memset(&market, 0, sizeof(struct market_data));
 	market.seller_id = sd->status.char_id;
+	market.seller_account = sd->status.account_id;
 	safestrncpy(market.seller_name, sd->status.name, NAME_LENGTH);
-	market.price = price;
-	market.buynow = buynow;
-	market.bid_step = bid_step;
+	market.price = (uint64)price;
+	market.buynow = (uint64)buynow;
+	market.bid_step = (uint64)bid_step;
 	market.timestamp = time(nullptr) + (hours * 3600);
 
 	memcpy(&market.item, &sd->inventory.u.items_inventory[index], sizeof(struct item));

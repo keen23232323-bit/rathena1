@@ -46,7 +46,7 @@ static const int32 packet_len_table[] = {
 	12,-1, 7, 3,  0, 0, 0, 0,  0, 0,-1, 9, -1, 0,  0, 0, //0x3880  Pet System,  Storages
 	-1,-1, 7, 3,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x3890  Homunculus [albator]
 	-1,-1, 8, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38A0  Clans
-	11,10, 7, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38B0  Custom Market
+	11,14, 7,-1,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0,  0, 0, //0x38B0  Custom Market
 };
 
 extern int32 char_fd; // inter server Fd used for char_fd
@@ -2062,16 +2062,16 @@ int32 intif_Market_register(struct market_data *market) {
 	return 1;
 }
 
-int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint32 bid, const char* name) {
+int32 intif_Market_bid(uint32 char_id, uint32 market_id, uint64 bid, const char* name) {
 	if(CheckForCharServer()) return 0;
 
-	WFIFOHEAD(inter_fd, 14 + NAME_LENGTH);
+	WFIFOHEAD(inter_fd, 18 + NAME_LENGTH);
 	WFIFOW(inter_fd, 0) = 0x30B5;
 	WFIFOL(inter_fd, 2) = char_id;
 	WFIFOL(inter_fd, 6) = market_id;
-	WFIFOL(inter_fd, 10) = bid;
-	safestrncpy(WFIFOCP(inter_fd, 14), name, NAME_LENGTH);
-	WFIFOSET(inter_fd, 14 + NAME_LENGTH);
+	WFIFOQ(inter_fd, 10) = bid;
+	safestrncpy(WFIFOCP(inter_fd, 18), name, NAME_LENGTH);
+	WFIFOSET(inter_fd, 18 + NAME_LENGTH);
 	return 1;
 }
 
@@ -2994,7 +2994,7 @@ void intif_parse_Market_register_result(int32 fd) {
 
 void intif_parse_Market_bid_result(int32 fd) {
 	uint32 char_id = RFIFOL(fd, 2);
-	uint32 amount = RFIFOL(fd, 6);
+	uint64 amount = RFIFOQ(fd, 6);
 
 	map_session_data* sd = map_charid2sd(char_id);
 	if (sd == nullptr) return;
@@ -3004,12 +3004,17 @@ void intif_parse_Market_bid_result(int32 fd) {
 		return;
 	}
 
-	if ((uint32)sd->status.zeny < amount) {
-		ShowError("Market: Player %s (%d) has insufficient zeny (%d < %u) for accepted bid!\n", sd->status.name, char_id, sd->status.zeny, amount);
+	if (amount > MAX_ZENY) {
+		ShowError("Market: Invalid bid amount %" PRIu64 " for player %s (%d)!\n", amount, sd->status.name, char_id);
 		return;
 	}
 
-	pc_payzeny(sd, amount, LOG_TYPE_AUCTION);
+	if ((uint64)sd->status.zeny < amount) {
+		ShowError("Market: Player %s (%d) has insufficient zeny (%d < %" PRIu64 ") for accepted bid!\n", sd->status.name, char_id, sd->status.zeny, amount);
+		return;
+	}
+
+	pc_payzeny(sd, (int32)amount, LOG_TYPE_AUCTION);
 	clif_displaymessage(sd->fd, "Market: Bid placed successfully.");
 }
 
@@ -3021,9 +3026,155 @@ void intif_parse_Market_cancel_result(int32 fd) {
 	if (sd == nullptr) return;
 
 	if (success) {
-		clif_displaymessage(sd->fd, "Market: Listing cancelled. Item returned via RODEX.");
+		clif_displaymessage(sd->fd, "Market: Listing cancel request sent.");
 	} else {
 		clif_displaymessage(sd->fd, "Market: Failed to cancel listing. It may have bids or already ended.");
+	}
+}
+
+void intif_parse_Market_purchase_ack(int32 fd) {
+	uint8 result = RFIFOB(fd, 4);
+	struct market_data* market = (struct market_data*)RFIFOP(fd, 5);
+	uint64 tax = (uint64)(market->price * 6 / 100);
+	uint64 seller_profit = market->price - tax;
+	bool is_responsible = false;
+
+	if (seller_profit > MAX_ZENY)
+		seller_profit = MAX_ZENY;
+
+	// Optimization: To avoid duplicate RODEX deliveries when multiple map servers are active,
+	// only the map server where the target player is online (or the first one in the list if offline) handles the mail.
+	// For cases involving two players (buyer and seller), the one responsible for the "main" player or result handles it.
+
+	uint32 target_char_id = 0;
+	switch (result) {
+		case 0: // Normal end/won
+		case 2: // Instant win
+			target_char_id = market->buyer_id; // Try buyer's map first
+			break;
+		case 1: // No bidders
+		case 3: // Cancelled
+		case 5: // Reg failure
+			target_char_id = market->seller_id;
+			break;
+		case 4: // Outbid
+			target_char_id = market->buyer_id;
+			break;
+	}
+
+	if (map_charid2sd(target_char_id) != nullptr)
+		is_responsible = true;
+	else if (other_mapserver_count == 0) // Only map server
+		is_responsible = true;
+	// If player is offline and multiple map servers, we'd need a way to elect one.
+	// For now, if chmapif_send(fd, ...) is used with a specific FD, only that map handles it.
+	// Packet 0x38B3 is only sent via chmapif_sendall if fd was 0 on char-server side.
+	// In my char-server logic, I use chmapif_send(fd, ...) where fd > 0 (successful bid/cancel from player).
+	// Timers use 0.
+
+	if (fd > 0) // Direct response to this map server
+		is_responsible = true;
+
+	if (!is_responsible)
+		return;
+
+	switch (result) {
+		case 0: // Normal end/won
+		case 2: // Instant win
+			{
+				struct mail_message msg;
+
+				// Deliver item to buyer
+				memset(&msg, 0, sizeof(struct mail_message));
+				safestrncpy(msg.send_name, "Market System", NAME_LENGTH);
+				msg.dest_id = market->buyer_id;
+				safestrncpy(msg.dest_name, market->buyer_name, NAME_LENGTH);
+				safestrncpy(msg.title, "Market: Purchase Won", MAIL_TITLE_LENGTH);
+				safestrncpy(msg.body, "You won the auction!", MAIL_BODY_LENGTH);
+				memcpy(&msg.item[0], &market->item, sizeof(struct item));
+				msg.timestamp = time(nullptr);
+				msg.type = MAIL_INBOX_NORMAL;
+				intif_Mail_send(0, &msg);
+
+				// Deliver Zeny to seller
+				memset(&msg, 0, sizeof(struct mail_message));
+				safestrncpy(msg.send_name, "Market System", NAME_LENGTH);
+				msg.dest_id = market->seller_id;
+				safestrncpy(msg.dest_name, market->seller_name, NAME_LENGTH);
+				safestrncpy(msg.title, "Market: Item Sold", MAIL_TITLE_LENGTH);
+				safestrncpy(msg.body, "Your item has been sold.", MAIL_BODY_LENGTH);
+				msg.zeny = (uint32)seller_profit;
+				msg.timestamp = time(nullptr);
+				msg.type = MAIL_INBOX_NORMAL;
+				intif_Mail_send(0, &msg);
+			}
+
+			if (result == 2) {
+				map_session_data* sd = map_charid2sd(market->buyer_id);
+				if (sd) clif_displaymessage(sd->fd, "Market: Instant buy-now success!");
+			}
+			break;
+
+		case 1: // No bidders
+		case 3: // Cancelled
+			{
+				struct mail_message msg;
+
+				// Return item to seller
+				memset(&msg, 0, sizeof(struct mail_message));
+				safestrncpy(msg.send_name, "Market System", NAME_LENGTH);
+				msg.dest_id = market->seller_id;
+				safestrncpy(msg.dest_name, market->seller_name, NAME_LENGTH);
+				safestrncpy(msg.title, (result == 1 ? "Market: No Bidders" : "Market: Listing Cancelled"), MAIL_TITLE_LENGTH);
+				safestrncpy(msg.body, (result == 1 ? "Your auction ended with no bidders." : "Your listing has been cancelled."), MAIL_BODY_LENGTH);
+				memcpy(&msg.item[0], &market->item, sizeof(struct item));
+				msg.timestamp = time(nullptr);
+				msg.type = MAIL_INBOX_NORMAL;
+				intif_Mail_send(0, &msg);
+			}
+			break;
+
+		case 4: // Outbid
+			{
+				struct mail_message msg;
+
+				// Refund previous bidder
+				memset(&msg, 0, sizeof(struct mail_message));
+				safestrncpy(msg.send_name, "Market System", NAME_LENGTH);
+				msg.dest_id = market->buyer_id;
+				safestrncpy(msg.dest_name, market->buyer_name, NAME_LENGTH);
+				safestrncpy(msg.title, "Market: Outbid", MAIL_TITLE_LENGTH);
+				safestrncpy(msg.body, "You have been outbid. Zeny returned.", MAIL_BODY_LENGTH);
+				msg.zeny = (uint32)market->price;
+				msg.timestamp = time(nullptr);
+				msg.type = MAIL_INBOX_NORMAL;
+				intif_Mail_send(0, &msg);
+
+				map_session_data* sd = map_charid2sd(market->buyer_id);
+				if (sd) clif_displaymessage(sd->fd, "Market: You have been outbid on an item.");
+			}
+			break;
+
+		case 5: // Registration failure
+			{
+				struct mail_message msg;
+
+				// Return item to seller
+				memset(&msg, 0, sizeof(struct mail_message));
+				safestrncpy(msg.send_name, "Market System", NAME_LENGTH);
+				msg.dest_id = market->seller_id;
+				safestrncpy(msg.dest_name, market->seller_name, NAME_LENGTH);
+				safestrncpy(msg.title, "Market: Registration Failed", MAIL_TITLE_LENGTH);
+				safestrncpy(msg.body, "Failed to list item. It has been returned.", MAIL_BODY_LENGTH);
+				memcpy(&msg.item[0], &market->item, sizeof(struct item));
+				msg.timestamp = time(nullptr);
+				msg.type = MAIL_INBOX_NORMAL;
+				intif_Mail_send(0, &msg);
+
+				map_session_data* sd = map_charid2sd(market->seller_id);
+				if (sd) clif_displaymessage(sd->fd, "Market: Registration failed. Your item was returned via RODEX.");
+			}
+			break;
 	}
 }
 
@@ -3974,6 +4125,7 @@ int32 intif_parse(int32 fd)
 	case 0x38B0:	intif_parse_Market_register_result(fd); break;
 	case 0x38B1:	intif_parse_Market_bid_result(fd); break;
 	case 0x38B2:	intif_parse_Market_cancel_result(fd); break;
+	case 0x38B3:	intif_parse_Market_purchase_ack(fd); break;
 
 	default:
 		ShowError("intif_parse : unknown packet %d %x\n",fd,RFIFOW(fd,0));
