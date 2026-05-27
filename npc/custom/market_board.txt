@@ -18,39 +18,48 @@
 		mes "[Market Board]";
 		mes "Would you like to list an item for sale?";
 		next;
-		if (select("Sell Item:My Listings:Cancel") == 3) close;
+		.@menu = select("Sell Item:My Listings:Cancel");
+		if (.@menu == 3) close;
 
-		switch(@menu) {
+		switch(.@menu) {
 		// =================== SELL ITEM ===================
 		case 1:
 			getinventorylist;
-			if (getarraysize(@inventorylist_id) == 0) {
+			.@list_count = @inventorylist_count;
+			if (.@list_count == 0) {
 				mes "[Market Board]";
 				mes "Your inventory is empty.";
 				next;
 				break;
 			}
 
+			// Copy to local scope to prevent override race conditions
+			copyarray .@inv_id[0], @inventorylist_id[0], .@list_count;
+			copyarray .@inv_idx[0], @inventorylist_idx[0], .@list_count;
+			copyarray .@inv_refine[0], @inventorylist_refine[0], .@list_count;
+			copyarray .@inv_equip[0], @inventorylist_equip[0], .@list_count;
+			copyarray .@inv_bound[0], @inventorylist_bound[0], .@list_count;
+
 			mes "[Market Board]";
 			mes "Select item to sell:";
 			next;
 
 			.@inv_list$ = "";
-			for (.@i = 0; .@i < getarraysize(@inventorylist_id); .@i++) {
-				.@iname$ = getitemname(@inventorylist_id[.@i]);
-				if (@inventorylist_refine[.@i] > 0)
-					.@iname$ = "+" + @inventorylist_refine[.@i] + " " + .@iname$;
+			for (.@i = 0; .@i < .@list_count; .@i++) {
+				.@iname$ = getitemname(.@inv_id[.@i]);
+				if (.@inv_refine[.@i] > 0)
+					.@iname$ = "+" + .@inv_refine[.@i] + " " + .@iname$;
 				.@inv_list$ = .@inv_list$ + .@iname$ + ":";
 			}
 			.@inv_list$ = .@inv_list$ + "Cancel";
 			.@inv_s = select(.@inv_list$);
 
-			if (.@inv_s > getarraysize(@inventorylist_id)) break; // Cancel
-			.@inv_idx = .@inv_s - 1;
-			.@item_index = @inventorylist_index[.@inv_idx];
+			if (.@inv_s > .@list_count) break; // Cancel
+			.@sel_idx = .@inv_s - 1;
+			.@item_index = .@inv_idx[.@sel_idx];
 
 			// Check equip
-			if (@inventorylist_equip[.@inv_idx] != 0) {
+			if (.@inv_equip[.@sel_idx] != 0) {
 				mes "[Market Board]";
 				mes "Please unequip the item first.";
 				next;
@@ -58,7 +67,7 @@
 			}
 
 			// Check bound
-			if (@inventorylist_bound[.@inv_idx] != 0) {
+			if (.@inv_bound[.@sel_idx] != 0) {
 				mes "[Market Board]";
 				mes "Bound items cannot be listed.";
 				next;
@@ -66,7 +75,7 @@
 			}
 
 			mes "[Market Board]";
-			mes "Selling: ^0000FF" + getitemname(@inventorylist_id[.@inv_idx]) + "^000000";
+			mes "Selling: ^0000FF" + getitemname(.@inv_id[.@sel_idx]) + "^000000";
 			mes " ";
 			mes "Starting Bid Price (z):";
 			input .@price;
@@ -104,7 +113,7 @@
 
 			mes "[Market Board]";
 			mes "Confirm listing:";
-			mes "Item: ^0000FF" + getitemname(@inventorylist_id[.@inv_idx]) + "^000000";
+			mes "Item: ^0000FF" + getitemname(.@inv_id[.@sel_idx]) + "^000000";
 			mes "Start: ^FF0000" + .@price + " z^000000";
 			if (.@buynow > 0) mes "Buy Now: ^00AA00" + .@buynow + " z^000000";
 			mes "Duration: ^888888" + .@hours + " hours^000000";
