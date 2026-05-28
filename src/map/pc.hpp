@@ -452,6 +452,7 @@ public:
 		// Bitmask of e_pcblock_action_flag values
 		uint16 block_action;
 		bool refineui_open;
+		bool market_vending;
 		t_itemid inventory_expansion_confirmation;
 		uint16 inventory_expansion_amount;
 		t_itemid laphine_synthesis;
@@ -1178,9 +1179,9 @@ static bool pc_cant_act( map_session_data* sd ){
 	#define pc_isvip(sd)      ( false )
 #endif
 #ifdef NEW_CARTS
-	#define pc_iscarton(sd)       ( (sd)->sc.getSCE(SC_PUSH_CART) )
+	#define pc_iscarton(sd)       ( (sd)->state.market_vending || (sd)->sc.getSCE(SC_PUSH_CART) )
 #else
-	#define pc_iscarton(sd)       ( (sd)->sc.option&OPTION_CART )
+	#define pc_iscarton(sd)       ( (sd)->state.market_vending || ((sd)->sc.option&OPTION_CART) )
 #endif
 
 #define pc_isfalcon(sd)       ( (sd)->sc.option&OPTION_FALCON )

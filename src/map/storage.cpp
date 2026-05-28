@@ -134,6 +134,9 @@ int32 storage_storageopen(map_session_data *sd)
 {
 	nullpo_ret(sd);
 
+	if (sd->state.market_vending)
+		return 1;
+
 	if(sd->state.storage_flag)
 		return 1; //Already open?
 

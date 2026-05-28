@@ -7,187 +7,24 @@
 //============================================================
 
 -	script	MarketBoard	858,{
+OnClick:
 	mes "[Market Board]";
 	mes "Welcome to the Global Market!";
-	mes "Search and Buy are now available via the ^0000FFMarket Search^000000 window.";
+	mes " ";
+	mes "How can I help you today?";
 	next;
 
-	.@char_id = getcharid(0);
-
-	while(1) {
-		mes "[Market Board]";
-		mes "Would you like to list an item for sale?";
-		next;
-		.@menu = select("Sell Item:My Listings:Cancel");
-		if (.@menu == 3) close;
-
-		switch(.@menu) {
-		// =================== SELL ITEM ===================
+	switch(select("Buy (Market Search):Sell (Vending UI):Cancel")) {
 		case 1:
-			getinventorylist;
-			.@list_count = @inventorylist_count;
-			if (.@list_count == 0) {
-				mes "[Market Board]";
-				mes "Your inventory is empty.";
-				next;
-				break;
-			}
-
-			// Copy to local scope to prevent override race conditions
-			copyarray .@inv_id[0], @inventorylist_id[0], .@list_count;
-			copyarray .@inv_idx[0], @inventorylist_idx[0], .@list_count;
-			copyarray .@inv_refine[0], @inventorylist_refine[0], .@list_count;
-			copyarray .@inv_equip[0], @inventorylist_equip[0], .@list_count;
-			copyarray .@inv_bound[0], @inventorylist_bound[0], .@list_count;
-
-			mes "[Market Board]";
-			mes "Select item to sell:";
-			next;
-
-			.@inv_list$ = "";
-			for (.@i = 0; .@i < .@list_count; .@i++) {
-				.@iname$ = getitemname(.@inv_id[.@i]);
-				if (.@inv_refine[.@i] > 0)
-					.@iname$ = "+" + .@inv_refine[.@i] + " " + .@iname$;
-				.@inv_list$ = .@inv_list$ + .@iname$ + ":";
-			}
-			.@inv_list$ = .@inv_list$ + "Cancel";
-			.@inv_s = select(.@inv_list$);
-
-			if (.@inv_s > .@list_count) break; // Cancel
-			.@sel_idx = .@inv_s - 1;
-			.@item_index = .@inv_idx[.@sel_idx];
-
-			// Check equip
-			if (.@inv_equip[.@sel_idx] != 0) {
-				mes "[Market Board]";
-				mes "Please unequip the item first.";
-				next;
-				break;
-			}
-
-			// Check bound
-			if (.@inv_bound[.@sel_idx] != 0) {
-				mes "[Market Board]";
-				mes "Bound items cannot be listed.";
-				next;
-				break;
-			}
-
-			mes "[Market Board]";
-			mes "Selling: ^0000FF" + getitemname(.@inv_id[.@sel_idx]) + "^000000";
-			mes " ";
-			mes "Starting Bid Price (z):";
-			input .@price;
-
-			if (.@price <= 0 || .@price > 1000000000) {
-				mes "[Market Board]";
-				mes "Invalid price. Must be between 1 and 1,000,000,000 z.";
-				next;
-				break;
-			}
-
-			mes "Buy Now Price (0 = auction only):";
-			input .@buynow;
-
-			if (.@buynow < 0 || .@buynow > 1000000000) {
-				mes "[Market Board]";
-				mes "Invalid Buy Now price.";
-				next;
-				break;
-			}
-			if (.@buynow > 0 && .@buynow <= .@price) {
-				mes "[Market Board]";
-				mes "Buy Now must be higher than starting price.";
-				next;
-				break;
-			}
-
-			mes "Duration in hours (1-72):";
-			input .@hours;
-			if (.@hours < 1) .@hours = 1;
-			if (.@hours > 72) .@hours = 72;
-
-			.@bid_step = .@price / 10;
-			if (.@bid_step < 1) .@bid_step = 1;
-
-			mes "[Market Board]";
-			mes "Confirm listing:";
-			mes "Item: ^0000FF" + getitemname(.@inv_id[.@sel_idx]) + "^000000";
-			mes "Start: ^FF0000" + .@price + " z^000000";
-			if (.@buynow > 0) mes "Buy Now: ^00AA00" + .@buynow + " z^000000";
-			mes "Duration: ^888888" + .@hours + " hours^000000";
-			mes "Tax: ^888888 6% on sale^000000";
-			next;
-			if (select("List Item:Cancel") == 2) break;
-
-			if (market_list_item(.@item_index, .@price, .@buynow, .@bid_step, .@hours)) {
-				mes "[Market Board]";
-				mes "Item listed successfully!";
-				mes "You will receive Zeny via RODEX when sold.";
-			} else {
-				mes "[Market Board]";
-				mes "Failed to list item.";
-				mes "Make sure the item is tradeable and not equipped.";
-			}
-			next;
+			atcommand "@market buy";
 			break;
-
-		// =================== MY LISTINGS ===================
 		case 2:
-			while(1) {
-				deletearray .@my_id;
-				deletearray .@my_name$;
-				deletearray .@my_price;
-				deletearray .@my_buyer;
-
-				query_sql("SELECT market_id, item_name, price, buyer_id FROM custom_market WHERE seller_id = " + .@char_id + " AND end_time > UNIX_TIMESTAMP() ORDER BY market_id DESC",
-					.@my_id, .@my_name$, .@my_price, .@my_buyer);
-				.@my_count = getarraysize(.@my_id);
-
-				mes "[Market Board]";
-				if (!.@my_count) {
-					mes "You have no active listings.";
-					next;
-					break; // Go back to main while(1) loop
-				}
-
-				.@my_list$ = "";
-				for (.@i = 0; .@i < .@my_count; .@i++) {
-					.@status$ = .@my_buyer[.@i] > 0 ? "[Has Bid]" : "[No Bids]";
-					.@my_list$ = .@my_list$ + .@my_name$[.@i] + " " + .@status$ + " - " + .@my_price[.@i] + "z:";
-				}
-				.@my_list$ = .@my_list$ + "Back";
-				.@my_s = select(.@my_list$);
-
-				if (.@my_s > .@my_count) break; // Back to main menu
-				.@my_idx = .@my_s - 1;
-
-				mes "[Market Board]";
-				mes "Listing: ^0000FF" + .@my_name$[.@my_idx] + "^000000";
-				mes "Current Price: ^FF0000" + .@my_price[.@my_idx] + " z^000000";
-
-				if (.@my_buyer[.@my_idx] == 0) {
-					mes "No bids yet — you can cancel.";
-					next;
-					if (select("Cancel Listing:Back") == 1) {
-						if (market_cancel(.@my_id[.@my_idx])) {
-							mes "[Market Board]";
-							mes "Listing cancelled. Item returned via RODEX.";
-						} else {
-							mes "[Market Board]";
-							mes "Failed to cancel listing.";
-						}
-						next;
-					}
-				} else {
-					mes "Bidding is active — cannot cancel.";
-					next;
-				}
-			}
+			atcommand "@market sell";
 			break;
-		}
+		case 3:
+			close;
 	}
+	close;
 }
 
 prontera,150,150,5	duplicate(MarketBoard)	Market Board#prt	858
