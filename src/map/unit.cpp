@@ -3113,6 +3113,14 @@ int32 unit_calc_pos(block_list *bl, int32 tx, int32 ty, uint8 dir)
 
 	nullpo_ret(ud);
 
+	if (bl->type == BL_PC) {
+		map_session_data* sd = (map_session_data*)bl;
+		if (sd->state.market_vending) {
+			sd->state.market_vending = false;
+			clif_updatestatus(*sd, SP_CARTINFO);
+		}
+	}
+
 	if(dir >= DIR_MAX || dir <= DIR_CENTER)
 		return 1;
 

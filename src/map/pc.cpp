@@ -6138,6 +6138,9 @@ bool pc_dropitem(map_session_data *sd,int32 n,int32 amount)
 {
 	nullpo_retr(1, sd);
 
+	if (sd->state.market_vending)
+		return false;
+
 	if(n < 0 || n >= MAX_INVENTORY)
 		return false;
 

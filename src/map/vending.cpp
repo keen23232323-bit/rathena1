@@ -516,6 +516,62 @@ bool vending_searchall( const map_session_data* sd, const struct s_search_store_
 * Open vending for Autotrader
 * @param sd Player as autotrader
 */
+void vending_openmarket(map_session_data& sd, const uint8* data, int32 count) {
+	int32 j;
+	int valid_count = 0;
+	char name_sql[NAME_LENGTH * 2 + 1];
+
+	if (pc_isdead(&sd) || !sd.state.market_vending) {
+		return;
+	}
+
+	if (count < 1 || count > 12) {
+		clif_displaymessage(sd.fd, "Market: Invalid item count.");
+		goto cleanup;
+	}
+
+	for (j = 0; j < count; j++) {
+		int16 index = *(uint16*)(data + 8 * j + 0);
+		int16 amount = *(uint16*)(data + 8 * j + 2);
+		uint32 value = *(uint32*)(data + 8 * j + 4);
+
+		index -= 2; // client offset
+
+		if (index < 0 || index >= MAX_INVENTORY || sd.inventory.u.items_inventory[index].nameid == 0 || sd.inventory.u.items_inventory[index].amount < amount)
+			continue;
+
+		struct item* it = &sd.inventory.u.items_inventory[index];
+
+		if (pc_isequip(&sd, index) || !it->identify || it->attribute == 1 || it->expire_time || (it->bound && !pc_can_give_bounded_items(&sd)) || !itemdb_cantrade(it, pc_get_group_level(&sd), pc_get_group_level(&sd))) {
+			clif_displaymessage(sd.fd, "Market: One or more items cannot be listed.");
+			continue;
+		}
+
+		Sql_EscapeString(mmysql_handle, name_sql, sd.status.name);
+
+		if (SQL_ERROR == Sql_Query(mmysql_handle,
+			"INSERT INTO custom_market (seller_id, seller_account, seller_name, nameid, amount, price, identify, refine, attribute, card0, card1, card2, card3, enchantgrade, expire_time, bound, end_time) "
+			"VALUES (%u, %u, '%s', %u, %u, %u, %d, %d, %d, %u, %u, %u, %u, %u, %u, %d, UNIX_TIMESTAMP() + 604800)",
+			sd.status.char_id, sd.status.account_id, name_sql, it->nameid, amount, value, it->identify, it->refine, it->attribute,
+			it->card[0], it->card[1], it->card[2], it->card[3], it->enchantgrade, it->expire_time, it->bound))
+		{
+			Sql_ShowDebug(mmysql_handle);
+			continue;
+		}
+
+		pc_delitem(&sd, index, amount, 0, 0, LOG_TYPE_NPC);
+		valid_count++;
+	}
+
+	if (valid_count > 0) {
+		clif_displaymessage(sd.fd, "Market: Items have been listed successfully.");
+	}
+
+cleanup:
+	sd.state.market_vending = false;
+	clif_updatestatus(sd, SP_CARTINFO); // Refresh/Clear ghost cart
+}
+
 void vending_reopen( map_session_data& sd )
 {
 	struct s_autotrader *at = nullptr;

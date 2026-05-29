@@ -3252,21 +3252,39 @@ void clif_cartlist( map_session_data *sd ){
 	int32 normal = 0;
 	int32 equip = 0;
 
-	storage_sortitem( sd->storage.u.items_cart, ARRAYLENGTH( sd->storage.u.items_cart ) );
+	if (sd->state.market_vending) {
+		for (int32 i = 0; i < MAX_INVENTORY; i++) {
+			if (sd->inventory.u.items_inventory[i].nameid == 0) {
+				continue;
+			}
 
-	for( int32 i = 0; i < MAX_CART; i++ ){
-		if( sd->cart.u.items_cart[i].nameid == 0 ){
-			continue;
+			struct item_data* id = itemdb_search(sd->inventory.u.items_inventory[i].nameid);
+
+			// Non-stackable (Equippable)
+			if (!itemdb_isstackable2(id)) {
+				clif_item_equip(client_index(i), &itemlist_equip.list[equip++], &sd->inventory.u.items_inventory[i], id, id->equip);
+				// Stackable (Normal)
+			} else {
+				clif_item_normal(client_index(i), &itemlist_normal.list[normal++], &sd->inventory.u.items_inventory[i], id);
+			}
 		}
+	} else {
+		storage_sortitem(sd->storage.u.items_cart, ARRAYLENGTH(sd->storage.u.items_cart));
 
-		struct item_data* id = itemdb_search( sd->cart.u.items_cart[i].nameid );
+		for (int32 i = 0; i < MAX_CART; i++) {
+			if (sd->cart.u.items_cart[i].nameid == 0) {
+				continue;
+			}
 
-		// Non-stackable (Equippable)
-		if( !itemdb_isstackable2(id) ){
-			clif_item_equip( client_index( i ), &itemlist_equip.list[equip++], &sd->cart.u.items_cart[i], id, id->equip );
-		 // Stackable (Normal)
-		}else{
-			clif_item_normal( client_index( i ), &itemlist_normal.list[normal++], &sd->cart.u.items_cart[i], id );
+			struct item_data* id = itemdb_search(sd->cart.u.items_cart[i].nameid);
+
+			// Non-stackable (Equippable)
+			if (!itemdb_isstackable2(id)) {
+				clif_item_equip(client_index(i), &itemlist_equip.list[equip++], &sd->cart.u.items_cart[i], id, id->equip);
+				// Stackable (Normal)
+			} else {
+				clif_item_normal(client_index(i), &itemlist_normal.list[normal++], &sd->cart.u.items_cart[i], id);
+			}
 		}
 	}
 
@@ -3586,10 +3604,22 @@ static void clif_cartcount( map_session_data& sd ){
 	PACKET_ZC_NOTIFY_CARTITEM_COUNTINFO packet{};
 
 	packet.PacketType = HEADER_ZC_NOTIFY_CARTITEM_COUNTINFO;
-	packet.curCount = sd.cart_num;
-	packet.maxCount = MAX_CART;
-	packet.curWeight = sd.cart_weight;
-	packet.maxWeight = sd.cart_weight_max;
+	if (sd.state.market_vending) {
+		int count = 0;
+		for (int i = 0; i < MAX_INVENTORY; i++) {
+			if (sd.inventory.u.items_inventory[i].nameid > 0)
+				count++;
+		}
+		packet.curCount = count;
+		packet.maxCount = MAX_INVENTORY;
+		packet.curWeight = sd.weight;
+		packet.maxWeight = sd.max_weight;
+	} else {
+		packet.curCount = sd.cart_num;
+		packet.maxCount = MAX_CART;
+		packet.curWeight = sd.cart_weight;
+		packet.maxWeight = sd.cart_weight_max;
+	}
 
 	clif_send( &packet, sizeof( packet ), &sd, SELF );
 }
@@ -14249,7 +14279,11 @@ void clif_parse_OpenVending(int32 fd, map_session_data* sd){
 	if( message[0] == '\0' ) // invalid input
 		return;
 
-	vending_openvending(*sd, message, data, len/8, nullptr);
+	if (sd->state.market_vending) {
+		vending_openmarket(*sd, data, len / 8);
+	} else {
+		vending_openvending(*sd, message, data, len/8, nullptr);
+	}
 }
 
 

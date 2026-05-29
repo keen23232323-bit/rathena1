@@ -671,7 +671,43 @@ ACMD_FUNC(where)
 
 ACMD_FUNC(market) {
 	nullpo_ret(sd);
-	npc_event_do("MarketBoard::OnTouch");
+
+	if (!message || !*message) {
+		npc_event_do("MarketBoard::OnClick");
+		return 0;
+	}
+
+	if (strcasecmp(message, "buy") == 0) {
+		searchstore_open(*sd, 1, SEARCHSTORE_EFFECT_REMOTE, 0);
+	} else if (strcasecmp(message, "sell") == 0) {
+		int32 count = 0;
+
+		if (SQL_ERROR == Sql_Query(mmysql_handle, "SELECT COUNT(*) FROM custom_market WHERE seller_id = %u", sd->status.char_id)) {
+			Sql_ShowDebug(mmysql_handle);
+			clif_displaymessage(sd->fd, "Market: Error checking your active listings.");
+			return -1;
+		}
+
+		if (SQL_SUCCESS == Sql_NextRow(mmysql_handle)) {
+			char* data;
+			Sql_GetData(mmysql_handle, 0, &data, nullptr);
+			count = atoi(data);
+		}
+		Sql_FreeResult(mmysql_handle);
+
+		if (count >= 50) {
+			clif_displaymessage(sd->fd, "Market: You have reached the maximum limit of 50 active listings.");
+			return -1;
+		}
+
+		sd->state.market_vending = true;
+		clif_cartlist(sd);
+		clif_updatestatus(*sd, SP_CARTINFO);
+		clif_openvendingreq(*sd, 12);
+	} else {
+		clif_displaymessage(sd->fd, "Usage: @market [buy|sell]");
+	}
+
 	return 0;
 }
 
